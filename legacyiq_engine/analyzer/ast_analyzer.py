@@ -217,17 +217,27 @@ class _FunctionExtractor(ast.NodeVisitor):
 
 
 def analyze_source(source_code: str, file_path: str = "source.py") -> ASTAnalysisResult:
-    """Analyze Python source code safely without executing it.
+    """Analyze source code safely without executing it.
+
+    Supports:
+    - Python (.py): standard library AST parsing.
+    - COBOL (.cbl, .cob, .cpy): safe line-based COBOL paragraph and condition analysis.
 
     Parameters:
-        source_code: Raw Python code string.
-        file_path: Optional display path for the source file.
+        source_code: Raw source code string.
+        file_path: File name or path indicating the language by extension.
 
     Returns:
-        ASTAnalysisResult containing extracted classes, functions, conditions,
+        ASTAnalysisResult containing extracted functions/paragraphs, conditions,
         returns, calls, and internal dependency links.
     """
     total_lines = len(source_code.splitlines()) if source_code else 0
+
+    # Dispatch to COBOL analyzer for COBOL sources
+    lower_path = file_path.lower()
+    if lower_path.endswith((".cbl", ".cob", ".cpy")):
+        from legacyiq_engine.analyzer.cobol_analyzer import analyze_cobol
+        return analyze_cobol(source_code, file_path=file_path)
 
     try:
         tree = ast.parse(source_code, filename=file_path)
