@@ -6,20 +6,50 @@ import AdaptiveIntelligenceSection from './components/sections/AdaptiveIntellige
 import DecisionCenterSection from './components/sections/DecisionCenterSection';
 import ImpactSimulatorSection from './components/sections/ImpactSimulatorSection';
 import AnalysisHistorySection from './components/sections/AnalysisHistorySection';
+import { DEMO_BANKING_FILES, DISCOVERED_FUNCTIONS } from './data/mockBankingData';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('overview');
+  const [files, setFiles] = useState(DEMO_BANKING_FILES);
+  const [isAnalyzed, setIsAnalyzed] = useState(false);
+  const [selectedFunctionId, setSelectedFunctionId] = useState(DISCOVERED_FUNCTIONS[0].id);
+
+  const handleLoadBankingDemo = () => {
+    setFiles(DEMO_BANKING_FILES);
+    setIsAnalyzed(false);
+    setSelectedFunctionId(DISCOVERED_FUNCTIONS[0].id);
+  };
 
   const handleResetDemo = () => {
+    setFiles(DEMO_BANKING_FILES);
+    setIsAnalyzed(false);
+    setSelectedFunctionId(DISCOVERED_FUNCTIONS[0].id);
     setActiveSection('overview');
   };
 
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'overview':
-        return <OverviewSection onNavigate={setActiveSection} />;
+        return (
+          <OverviewSection
+            files={files}
+            isAnalyzed={isAnalyzed}
+            onNavigate={setActiveSection}
+            onLoadBankingDemo={handleLoadBankingDemo}
+          />
+        );
       case 'code-evidence':
-        return <CodeEvidenceSection onNavigate={setActiveSection} />;
+        return (
+          <CodeEvidenceSection
+            files={files}
+            setFiles={setFiles}
+            isAnalyzed={isAnalyzed}
+            setIsAnalyzed={setIsAnalyzed}
+            selectedFunctionId={selectedFunctionId}
+            setSelectedFunctionId={setSelectedFunctionId}
+            onLoadBankingDemo={handleLoadBankingDemo}
+          />
+        );
       case 'adaptive-intelligence':
         return <AdaptiveIntelligenceSection onNavigate={setActiveSection} />;
       case 'decision-center':
@@ -29,7 +59,14 @@ export default function App() {
       case 'analysis-history':
         return <AnalysisHistorySection onNavigate={setActiveSection} />;
       default:
-        return <OverviewSection onNavigate={setActiveSection} />;
+        return (
+          <OverviewSection
+            files={files}
+            isAnalyzed={isAnalyzed}
+            onNavigate={setActiveSection}
+            onLoadBankingDemo={handleLoadBankingDemo}
+          />
+        );
     }
   };
 

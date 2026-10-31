@@ -1,4 +1,4 @@
-import { FileCode2, Sparkles, ShieldCheck, ArrowRight, Eye } from 'lucide-react';
+import { FileCode2, Sparkles, Eye } from 'lucide-react';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 

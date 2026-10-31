@@ -1,21 +1,15 @@
-import { useState } from 'react';
 import { 
   Code2, 
   CornerDownRight, 
-  Layers, 
-  ShieldAlert, 
   GitCommit, 
-  ArrowRight,
-  Brackets,
-  ExternalLink
+  Brackets
 } from 'lucide-react';
 import Badge from '../common/Badge';
 
 export default function FunctionExplorer({
   functions = [],
   selectedFunctionId,
-  onSelectFunction,
-  onViewRule
+  onSelectFunction
 }) {
   const activeFn = functions.find(fn => fn.id === selectedFunctionId) || functions[0];
 

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { UploadCloud, FileCode2, AlertCircle, Sparkles } from 'lucide-react';
+import { UploadCloud, AlertCircle, Sparkles } from 'lucide-react';
 import Button from '../common/Button';
 
 export default function UploadZone({ 

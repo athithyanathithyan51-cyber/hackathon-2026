@@ -8,15 +8,10 @@ import {
   ShieldCheck, 
   ArrowRight, 
   Layers, 
-  Terminal,
-  Activity,
   GitCommit,
-  Sparkles,
-  CheckCircle2,
-  Clock
+  Sparkles
 } from 'lucide-react';
 import { 
-  MOCK_ANALYSIS_METRICS, 
   BUSINESS_RULE_CANDIDATES, 
   DISCOVERED_FUNCTIONS 
 } from '../../data/mockBankingData';

@@ -10,19 +10,11 @@ import Badge from '../common/Badge';
 import Button from '../common/Button';
 import { 
   FileCode2, 
-  Sparkles, 
-  Layers, 
-  Code, 
-  Eye, 
-  BookOpen, 
-  Terminal,
-  ShieldCheck
+  Sparkles
 } from 'lucide-react';
 import { 
-  DEMO_BANKING_FILES, 
   DISCOVERED_FUNCTIONS, 
-  BUSINESS_RULE_CANDIDATES,
-  BANKING_SOURCE_CODE
+  BUSINESS_RULE_CANDIDATES
 } from '../../data/mockBankingData';
 
 export default function CodeEvidenceSection({
@@ -189,7 +181,6 @@ export default function CodeEvidenceSection({
           isAnalyzed={isAnalyzed}
           onTriggerAnalysis={handleTriggerAnalysis}
           filesCount={files.length}
-          onReset={() => setIsAnalyzed(false)}
         />
       )}
 
@@ -276,7 +267,6 @@ export default function CodeEvidenceSection({
               functions={DISCOVERED_FUNCTIONS}
               selectedFunctionId={selectedFunctionId || DISCOVERED_FUNCTIONS[0].id}
               onSelectFunction={setSelectedFunctionId}
-              onViewRule={() => setActiveTab('rules')}
             />
           )}
 

@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Cpu, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
+import { CheckCircle2, Cpu, RefreshCw, Sparkles } from 'lucide-react';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 
@@ -8,8 +8,7 @@ export default function AnalysisSummary({
   analysisStep = '',
   isAnalyzed = false,
   onTriggerAnalysis,
-  filesCount = 0,
-  onReset
+  filesCount = 0
 }) {
   if (isAnalyzing) {
     return (

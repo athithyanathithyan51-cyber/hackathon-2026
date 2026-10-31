@@ -1,4 +1,4 @@
-import { FileCode2, Ticket, FileText, Database, ArrowRight } from 'lucide-react';
+import { FileCode2, Ticket, FileText, Database } from 'lucide-react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 
