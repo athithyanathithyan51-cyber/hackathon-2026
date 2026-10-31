@@ -8,8 +8,10 @@
 - Nagukan: Data/AI (data source, model logic, sample data, testing)
 
 **Pitch**
-- TBD: Pitch presenter
-- TBD: Slides, demo script, Q&A
+- Preneeth: Lead presenter (2-minute pitch, Q&A)
+- Ajmal: Slides and demo script
+
+All members use AI tools in their own role (TCS AI Hackathon).
 
 ## Idea
 
