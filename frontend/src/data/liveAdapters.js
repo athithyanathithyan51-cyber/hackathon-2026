@@ -212,3 +212,82 @@ export function toAssociation(evidenceEntry, findings) {
     uncertaintyFlag: 'Incident text is evidence, not approved policy. A business owner must confirm it.'
   };
 }
+
+const VERDICT_BY_RECOMMENDATION = {
+  retain: { verdict: 'KEEP', variant: 'neutral', strategy: 'RETAIN' },
+  refactor: { verdict: 'MODERNIZE', variant: 'success', strategy: 'REFACTOR' },
+  replace: { verdict: 'MODERNIZE', variant: 'success', strategy: 'REPLACE' },
+  investigate: { verdict: 'INVESTIGATE', variant: 'info', strategy: 'RETAIN' }
+};
+
+const ACTION_BY_VERDICT = {
+  REVIEW: 'Validate the business rule with its owner before any change.',
+  KEEP: 'Keep the current behaviour. No change is recommended.',
+  INVESTIGATE: 'Gather more evidence before deciding.',
+  MODERNIZE: 'Refactor with characterization tests passing first.'
+};
+
+/**
+ * Decision Center records built from live findings, their history and submitted evidence.
+ * Approvals are not stored by the backend yet, so every record starts as PENDING_REVIEW.
+ */
+export function toDecisionRecords(findings, historyMap) {
+  return findings.map((f) => {
+    const conflicts = (f.evidence || []).filter((e) => e.match === 'CONFLICTED');
+    const isConflicted = f.evidence_status === 'CONFLICTED_BY_EVIDENCE' || conflicts.length > 0;
+    const mapped = VERDICT_BY_RECOMMENDATION[f.recommendation] || VERDICT_BY_RECOMMENDATION.investigate;
+    const verdict = isConflicted ? 'REVIEW' : mapped.verdict;
+    const level = f.risk_category ? f.risk_category.charAt(0) + f.risk_category.slice(1).toLowerCase() : 'Unknown';
+    const versions = historyMap[f.id] || [];
+    return {
+      id: f.id,
+      componentName: f.function,
+      file: f.file,
+      lines: `Lines ${f.start_line}`,
+      relatedRuleId: f.id,
+      relatedRuleName: f.function,
+      category: 'Business rule',
+      verdict,
+      verdictVariant: isConflicted ? 'warning' : mapped.variant,
+      riskLevel: level,
+      riskVariant: riskVariantFor(f.risk_category),
+      confidenceScore: confidenceFor(f),
+      evidenceCompleteness: isConflicted ? 'Conflicting evidence' : 'Observed in code only',
+      evidenceCompletenessVariant: isConflicted ? 'warning' : 'info',
+      supportingCount: 1,
+      conflictingCount: conflicts.length,
+      missingCount: isConflicted ? 1 : 0,
+      isDisputed: isConflicted,
+      supportingEvidence: [{
+        id: 'EV-CODE',
+        title: 'Source code extraction',
+        source: locationOf(f),
+        type: 'OBSERVED CODE',
+        detail: f.observed_behavior
+      }],
+      conflictingEvidence: conflicts.map((e) => ({
+        id: e.source,
+        title: 'Submitted evidence',
+        source: e.source,
+        type: 'SUBMITTED EVIDENCE',
+        detail: e.explanation
+      })),
+      missingEvidence: isConflicted ? [{
+        id: 'MISS-VALIDATION',
+        title: 'Business owner validation',
+        description: 'Confirm this rule with the business owner before any change.'
+      }] : [],
+      verdictReason: f.description,
+      recommendedAction: ACTION_BY_VERDICT[verdict],
+      recommendedStrategy: mapped.strategy,
+      approvalStatus: 'PENDING_REVIEW',
+      approvalHistory: versions.map((v) => ({
+        id: `appr-${f.id}-v${v.version}`,
+        reviewer: 'Analysis engine',
+        decision: v.version === 1 ? 'AUTO_ASSESSED' : 'REASSESSED',
+        timestamp: v.timestamp,
+        comment: v.change_reason
+      }))
+    };
+  });
+}
