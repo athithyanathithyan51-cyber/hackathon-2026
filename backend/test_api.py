@@ -146,3 +146,37 @@ def test_cobol_without_procedure_division_returns_422(client):
     response = _create(client, [{"path": "broken.cbl", "content": "       01 X PIC 9.\n"}])
     assert response.status_code == 422
     assert "PROCEDURE DIVISION" in response.json()["detail"]
+
+
+COBOL_SHELL = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CLEANUP.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           IF WS-BALANCE < 0
+              CALL 'SYSTEM' USING WS-CMD
+           END-IF.
+"""
+
+
+def test_shell_call_is_flagged_critical_and_blocks_plan(client):
+    response = _create(client, [{"path": "cleanup.cbl", "content": COBOL_SHELL}])
+    project_id = response.json()["id"]
+    findings = client.get(f"/api/projects/{project_id}/findings").json()
+    assert findings[0]["risk_category"] == "CRITICAL"
+
+    plan = client.post(f"/api/projects/{project_id}/plan").json()
+    assert plan["summary"]["blocked"] == 1
+    assert plan["phases"][0]["name"] == "Stop and fix first"
+    assert "CALL:SYSTEM" not in plan["phases"][0]["actions"][0]
+    assert "SYSTEM" in plan["findings"][0]["java_skeleton"] or plan["findings"][0]["blocked"]
+
+
+def test_plan_returns_phases_java_skeleton_and_ai_interpretation(client):
+    project_id = _banking_project(client)
+    plan = client.post(f"/api/projects/{project_id}/plan").json()
+    assert [p["name"] for p in plan["phases"]][:2] == ["Stop and fix first", "Phase 1: validate and characterize"]
+    item = plan["findings"][0]
+    assert item["java_skeleton"].startswith("// Source: banking_legacy.py:2")
+    assert "public void calculateByPenalty" not in item["java_skeleton"]
+    assert item["interpretation"]["model"]

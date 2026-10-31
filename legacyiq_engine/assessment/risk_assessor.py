@@ -17,9 +17,19 @@ from legacyiq_engine.models.schemas import (
 )
 
 
+FINANCIAL_TERMS = [
+    "penalty", "fee", "charge", "payment", "rate", "balance", "amount",
+    "withdraw", "deposit", "total", "interest", "transfer",
+]
+# Programs that run operating-system commands. Any call to one of these is high risk,
+# whatever the business rule says. Matches both COBOL and Python style names.
+SHELL_PROGRAMS = {"SYSTEM", "CBL_EXEC_SYS", "POPEN", "SUBPROCESS", "OS.SYSTEM", "SH", "CMD"}
+
+
 def assess_risk(
     candidate: BusinessRuleCandidate,
     evidence_matches: list[EvidenceMatchResult] | None = None,
+    external_calls: list[str] | None = None,
 ) -> RiskAssessment:
     """Calculates an explainable heuristic risk score for a business-rule finding.
 
@@ -43,14 +53,31 @@ def assess_risk(
         )
     )
 
-    func_lower = candidate.function_name.lower()
-    if any(term in func_lower for term in ["penalty", "fee", "charge", "payment", "rate"]):
+    text_lower = f"{candidate.function_name} {candidate.observed_condition}".lower()
+    if any(term in text_lower for term in FINANCIAL_TERMS):
         score += 25.0
         factors.append(
             RiskFactor(
                 factor_name="Direct Financial Impact",
                 impact_score=25.0,
                 description=f"Function `{candidate.function_name}` directly affects customer billing or monetary penalty assessments.",
+            )
+        )
+
+    shell_calls = [
+        call for call in (external_calls or [])
+        if call.split(":")[-1].upper() in SHELL_PROGRAMS
+    ]
+    if shell_calls:
+        score += 45.0
+        factors.append(
+            RiskFactor(
+                factor_name="External Command Execution",
+                impact_score=45.0,
+                description=(
+                    f"Calls {', '.join(sorted(set(shell_calls)))}, which runs operating-system commands. "
+                    "Commands can change files outside the business logic. Review before any migration."
+                ),
             )
         )
 
