@@ -30,13 +30,16 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown project or finding, `422` invalid body or Python that does not parse.
 
-**Status:** all endpoints below are implemented and tested on this branch. Not built yet: the `functions` listing and the `report` endpoint (planned for the COBOL and Java step).
+**Status:** all endpoints below are implemented and tested. Not built yet: the `functions` listing and the `report` endpoint. Java output is a documented stub; full translation needs an LLM key.
+
+**Supported inputs:** Python (`.py`) and COBOL (`.cbl`, `.cob`). Copybooks (`.cpy`) and other files are stored as evidence only.
 
 **Rules for every endpoint**
 - Uploaded code is parsed, never executed.
 - Every finding carries a real `file` and `start_line`.
 - Each finding is versioned. Adding evidence creates a new version; earlier versions are kept.
 - Each project has its own history database, so projects never share findings.
+- Any call to an operating-system command (for example `CALL 'SYSTEM'`) is CRITICAL risk and is listed under "Stop and fix first" in the plan.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -48,6 +51,7 @@ Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown pr
 | GET | `/api/projects/{id}/findings` | - | `[{ "id", "function", "file", "start_line", "version", "description", "evidence_status", "risk_score", "risk_category", "recommendation", "evidence": [{ "source", "match", "explanation" }] }]` |
 | GET | `/api/projects/{id}/findings/{fid}/history` | - | `[{ "version", "timestamp", "change_reason", "evidence_status", "risk_score", "risk_category" }]` |
 | POST | `/api/projects/{id}/impact` | `{ "finding_id" }` | `{ "finding_id", "risk_score", "risk_category", "risk_reasons": [str], "affected": ["<file>:<function>"], "regression_tests": [{ "input", "expected", "note" }], "recommendation" }` |
+| POST | `/api/projects/{id}/plan` | - | `{ "summary": { "rules", "blocked", "investigate" }, "phases": [{ "name", "actions": [str] }], "findings": [{ "id", "function", "file", "start_line", "condition", "risk_category", "risk_score", "blocked", "recommendation", "interpretation": { "business_explanation", "questions", "model", "is_fallback" }, "java_skeleton" }] }` |
 | GET | `/api/projects/{id}/overview` | - | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
 **Enums**
