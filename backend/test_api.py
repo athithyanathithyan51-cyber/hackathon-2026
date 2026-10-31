@@ -169,14 +169,13 @@ def test_shell_call_is_flagged_critical_and_blocks_plan(client):
     assert plan["summary"]["blocked"] == 1
     assert plan["phases"][0]["name"] == "Stop and fix first"
     assert "CALL:SYSTEM" not in plan["phases"][0]["actions"][0]
-    assert "SYSTEM" in plan["findings"][0]["java_skeleton"] or plan["findings"][0]["blocked"]
+    assert plan["findings"][0]["blocked"] is True
 
 
-def test_plan_returns_phases_java_skeleton_and_ai_interpretation(client):
+def test_plan_returns_phases_and_ai_interpretation(client):
     project_id = _banking_project(client)
     plan = client.post(f"/api/projects/{project_id}/plan").json()
     assert [p["name"] for p in plan["phases"]][:2] == ["Stop and fix first", "Phase 1: validate and characterize"]
     item = plan["findings"][0]
-    assert item["java_skeleton"].startswith("// Source: banking_legacy.py:2")
-    assert "public void calculateByPenalty" not in item["java_skeleton"]
+    assert "java_skeleton" not in item
     assert item["interpretation"]["model"]
