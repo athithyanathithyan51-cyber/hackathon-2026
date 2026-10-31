@@ -11,8 +11,8 @@ BASE_DIR = Path(__file__).resolve().parent
 
 # Groq API configuration
 GROQ_API_KEY: str | None = os.getenv("GROQ_API_KEY")
-# Current supported versatile models on Groq: llama-3.3-70b-versatile, llama-3.1-8b-instant
-GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+# llama-3.3-70b-versatile is no longer available to the project key. Override with GROQ_MODEL.
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_TIMEOUT_SECONDS: int = int(os.getenv("GROQ_TIMEOUT_SECONDS", "15"))
 
 # Storage configuration

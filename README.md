@@ -30,7 +30,7 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown project or finding, `422` invalid body or Python that does not parse.
 
-**Status:** all endpoints below are implemented and tested. Not built yet: the `functions` listing and the `report` endpoint. Scope is modernization planning and risk only: no code conversion.
+**Status:** all endpoints below are implemented and tested. All endpoints below are built. Scope is modernization planning and risk only: no code conversion.
 
 **Supported inputs:** Python (`.py`) and COBOL (`.cbl`, `.cob`). Analysis only; no code is converted or rewritten. Copybooks (`.cpy`) and other files are stored as evidence only.
 
@@ -52,6 +52,7 @@ Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown pr
 | GET | `/api/projects/{id}/findings/{fid}/history` | - | `[{ "version", "timestamp", "change_reason", "evidence_status", "risk_score", "risk_category" }]` |
 | POST | `/api/projects/{id}/impact` | `{ "finding_id" }` | `{ "finding_id", "risk_score", "risk_category", "risk_reasons": [str], "affected": ["<file>:<function>"], "regression_tests": [{ "input", "expected", "note" }], "recommendation" }` |
 | POST | `/api/projects/{id}/plan` | - | `{ "summary": { "rules", "blocked", "investigate" }, "phases": [{ "name", "actions": [str] }], "findings": [{ "id", "function", "file", "start_line", "condition", "risk_category", "risk_score", "blocked", "recommendation", "interpretation": { "business_explanation", "questions", "model", "is_fallback" } }] }` |
+| GET | `/api/projects/{id}/functions` | - | `[{ "file", "function", "start_line", "end_line", "conditions", "returns", "calls": [str], "called_by": [str] }]` |
 | GET | `/api/projects/{id}/overview` | - | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
 **Enums**
@@ -66,6 +67,12 @@ Run everything from the repository root.
 ```bash
 pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 ```
+
+## AI explanations (optional)
+
+Set `GROQ_API_KEY` to get AI-written business explanations. Without it, the backend uses template explanations and marks them `is_fallback: true`.
+
+Copy `backend/.env.example` to `backend/.env` and add the key there. `.env` files are gitignored, so the key is never committed.
 
 ## Run
 
