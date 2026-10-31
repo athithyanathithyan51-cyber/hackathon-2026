@@ -66,10 +66,10 @@ export default function EvidenceAssociationCard({
             </div>
             <div className="text-xs font-semibold text-slate-900 font-mono flex items-center gap-1.5">
               <FileCode2 className="w-3.5 h-3.5 text-blue-600" />
-              {association.matchedFunction}()
+              {association.matchedFunction}
             </div>
             <p className="text-[11px] text-slate-500">
-              Condition: <code className="text-slate-700">balance &lt; 1000 → return 50</code>
+              Condition: <code className="text-slate-700">WS-BALANCE &lt; 1000.00 → MOVE 50.00 TO WS-PENALTY</code>
             </p>
           </div>
         </div>

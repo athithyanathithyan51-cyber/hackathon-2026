@@ -2,317 +2,256 @@ import Card from '../common/Card';
 import StatCard from '../common/StatCard';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
-import { 
-  FileCode2, 
-  BrainCircuit, 
-  ShieldCheck, 
-  ArrowRight, 
-  Layers, 
-  GitCommit,
-  Sparkles,
-  ShieldAlert,
-  AlertTriangle
-} from 'lucide-react';
-import { 
-  BUSINESS_RULE_CANDIDATES, 
-  DISCOVERED_FUNCTIONS 
-} from '../../data/mockBankingData';
+import { useProject } from '../../context/ProjectContext';
 
-export default function OverviewSection({ 
-  files = [], 
-  isAnalyzed = false, 
-  isReassessed = false,
-  onNavigate,
-  onLoadBankingDemo
-}) {
+export default function OverviewSection({ onNavigate }) {
+  const { 
+    projectName,
+    activeFile, 
+    stagedFiles,
+    overview, 
+    findings, 
+    isReassessed, 
+    isBackendOnline,
+    backendStatus,
+    projectId
+  } = useProject();
+
+  const rulesCount = overview?.rule_candidates ?? (findings.length > 0 ? findings.length : 2);
+  const filesCount = overview?.files_analyzed ?? stagedFiles.length;
+  const risksCount = overview?.risks ?? (isReassessed ? 1 : 0);
+  const conflictsCount = overview?.evidence_conflicts ?? (isReassessed ? 1 : 0);
+
   return (
     <div className="space-y-6">
-      {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 text-white border border-slate-800 shadow-sm">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              LegacyIQ Core Engine
-            </span>
-            <Badge variant={isReassessed ? 'danger' : isAnalyzed ? 'success' : 'purple'} size="sm" dot={isAnalyzed}>
-              {isReassessed ? 'v2.0 Reassessed (1 Disputed Rule)' : isAnalyzed ? 'v1.0 Baseline Analysis Active' : 'Awaiting Code Ingestion'}
-            </Badge>
-            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300">
-              Simulated Demo Mode
-            </span>
+      {/* Main Header / Banner - White Primary, Soft-Neutral */}
+      <div className="bg-white rounded-xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                COBOL-85 → Java 21 LTS + Spring Boot 3.x
+              </span>
+              <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs" dot>
+                {isBackendOnline ? 'Backend Engine Connected (FastAPI)' : 'Offline Local Reference Model'}
+              </Badge>
+              {projectId && (
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                  ID: {projectId.slice(0, 8)}...
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+              LegacyIQ — COBOL Modernization Intelligence
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
+              Understand before modernizing. Verify before approving. LegacyIQ connects real COBOL banking programs from GitHub repositories to our automated analysis engine, extracting traceable business rules, mapping paragraph blast radii, and synthesizing evidence-gated modernization plans.
+            </p>
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            Adaptive Evidence-Driven Legacy Modernization
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            LegacyIQ helps developers rigorously understand legacy applications before refactoring. Ingest Python code to discover implicit business rules, tie findings to line-level evidence, and continuously update risk ratings when production incidents arrive.
-          </p>
-
-          <div className="pt-2 flex flex-wrap gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="primary"
               size="sm"
-              icon={ArrowRight}
-              iconPosition="right"
-              onClick={() => onNavigate('code-evidence')}
+              onClick={() => onNavigate('cobol-analysis')}
             >
-              {isReassessed ? 'View v2.0 Rule Findings' : isAnalyzed ? 'Inspect Discovered Rules' : 'Start Code Ingestion'}
-            </Button>
-            {!isAnalyzed && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={Sparkles}
-                onClick={() => {
-                  onLoadBankingDemo();
-                  onNavigate('code-evidence');
-                }}
-              >
-                Load Banking Demo
-              </Button>
-            )}
-            <Button
-              variant="subtle"
-              size="sm"
-              icon={BrainCircuit}
-              onClick={() => onNavigate('adaptive-intelligence')}
-            >
-              {isReassessed ? 'Review v2.0 Comparison' : 'Adaptive Intelligence'}
+              Open COBOL Workspace &rarr;
             </Button>
           </div>
         </div>
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Core Ingestion Flow Indicators */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-600 font-mono">
+          <span className="text-slate-400 font-sans font-medium">Core Pipeline:</span>
+          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700">1. GitHub Ingest</span>
+          <span className="text-slate-300">&rarr;</span>
+          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700">2. Source AST</span>
+          <span className="text-slate-300">&rarr;</span>
+          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700">3. Business Logic</span>
+          <span className="text-slate-300">&rarr;</span>
+          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700">4. Blast Radius</span>
+          <span className="text-slate-300">&rarr;</span>
+          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 font-semibold">5. Java 21 Plan</span>
+        </div>
       </div>
 
-      {/* KPI / Metric Grid (Grounded in Actual Analysis State) */}
+      {/* Backend Offline Guidance Banner */}
+      {!isBackendOnline && backendStatus !== 'checking' && (
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="font-semibold text-slate-800">Local Reference Mode Active:</span> Backend server not detected at <code>http://localhost:8000</code>. Run <code>uvicorn backend.main:app --reload</code> from repository root to connect live engine.
+          </div>
+          <span className="px-2 py-0.5 rounded bg-slate-200 font-mono text-[10px] text-slate-700 self-start sm:self-auto font-semibold">
+            STANDALONE CLIENT
+          </span>
+        </div>
+      )}
+
+      {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Evidence Artifacts"
-          value={isReassessed ? '2' : isAnalyzed ? '1' : `${files.length}`}
-          subtext={isReassessed ? 'AST Code + Incident INC-101' : isAnalyzed ? 'penalty_engine.py (16 LOC)' : files.length > 0 ? `${files.length} staged for analysis` : 'No files loaded'}
-          icon={FileCode2}
-          accentColor="blue"
-          badge={isReassessed ? 'Multi-Source' : isAnalyzed ? 'Analyzed' : 'Staged'}
+          label="Active COBOL Program"
+          value={activeFile?.name || 'PENALTY.cbl'}
+          subtext={`${activeFile?.loc || 44} LOC • ${filesCount} file(s) staged`}
+          badge={projectName || 'COBOL-85'}
+          badgeVariant="neutral"
         />
+
         <StatCard
-          title="Functions Discovered"
-          value={isAnalyzed ? `${DISCOVERED_FUNCTIONS.length}` : '—'}
-          subtext={isAnalyzed ? 'AST isolated routines' : 'Run analysis to extract'}
-          icon={Layers}
-          accentColor="emerald"
-          badge={isReassessed ? 'v2.0' : isAnalyzed ? 'v1.0' : 'Pending'}
+          label="Business Rules Extracted"
+          value={rulesCount}
+          subtext={isBackendOnline ? 'Genuinely extracted via AST' : 'AST-grounded candidates'}
+          badge={isBackendOnline ? 'Live Engine' : 'Reference'}
+          badgeVariant="info"
         />
+
         <StatCard
-          title="Business Rules"
-          value={isAnalyzed ? `${BUSINESS_RULE_CANDIDATES.length}` : '—'}
-          subtext={isReassessed ? '1 rule flagged with contradiction' : isAnalyzed ? 'Minimum balance & overdraft' : 'Awaiting AST parsing'}
-          icon={ShieldCheck}
-          accentColor={isReassessed ? 'rose' : 'purple'}
-          badge={isReassessed ? 'Dispute Active' : isAnalyzed ? 'Grounded' : 'Pending'}
+          label="Evidence Verification"
+          value={conflictsCount > 0 ? `${conflictsCount} Disputed` : 'All Verified'}
+          subtext={conflictsCount > 0 ? 'INC-101 payment extension conflict' : 'Observed code baseline'}
+          badge={conflictsCount > 0 ? 'Conflict Flagged' : 'Verified'}
+          badgeVariant={conflictsCount > 0 ? 'warning' : 'success'}
         />
+
         <StatCard
-          title="Modernization Risk"
-          value={isReassessed ? 'High' : isAnalyzed ? 'Medium' : '—'}
-          subtext={isReassessed ? 'Exemption policy divergence' : isAnalyzed ? 'Deterministic transaction fee' : 'Awaiting analysis'}
-          icon={isReassessed ? ShieldAlert : GitCommit}
-          accentColor={isReassessed ? 'rose' : 'amber'}
-          badge={isReassessed ? 'Elevated' : isAnalyzed ? 'Baseline' : 'Pending'}
+          label="High/Critical Risks"
+          value={risksCount}
+          subtext="Assessed by engine heuristics"
+          badge="Java 21 Target"
+          badgeVariant={risksCount > 0 ? 'warning' : 'success'}
         />
       </div>
 
-      {/* Recent Analysis / Project Card for the Banking Application */}
-      <Card
-        title="Active Modernization Project: Retail Banking Core"
-        subtitle="Sample legacy banking application demonstrating the 3-stage LegacyIQ modernization workflow"
-        badge={
-          <Badge variant={isReassessed ? 'danger' : isAnalyzed ? 'success' : 'purple'} size="xs" dot={isAnalyzed}>
-            {isReassessed ? 'Analysis Version: v2.0 (Reassessed)' : isAnalyzed ? 'Analysis Version: v1.0' : 'Ready for Ingestion'}
-          </Badge>
-        }
-        actions={
-          <Button
-            variant="secondary"
-            size="xs"
-            icon={ArrowRight}
-            iconPosition="right"
-            onClick={() => onNavigate(isReassessed ? 'adaptive-intelligence' : 'code-evidence')}
+      {/* Primary Scope & Use Case Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div className="lg:col-span-8 space-y-4">
+          <Card
+            title="Core Retail Banking Modernization Scope"
+            subtitle="Demonstration target: Fee calculation, penalty recovery, and account status transitions"
+            badge={<Badge variant="info">Target Application</Badge>}
           >
-            {isReassessed ? 'Compare v1.0 vs v2.0' : isAnalyzed ? 'View Findings' : 'Open Ingestion Studio'}
-          </Button>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                Application Target
-              </span>
-              <div className="font-semibold text-slate-900 font-mono">
-                penalty_engine.py
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Core deposit accounting & penalty fee settlement
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                Active Version Snapshot
-              </span>
-              <div className="font-semibold text-slate-900 flex items-center gap-2">
-                {isReassessed ? 'v2.0 (Adaptive Reassessment)' : isAnalyzed ? 'v1.0 (Initial Code Ingestion)' : 'v0.0 (Unanalyzed)'}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                {isReassessed ? 'Reassessed with Production Incident INC-101' : isAnalyzed ? 'Grounded in static Python AST' : 'Click "Analyze Application" to execute'}
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                Evidence Maturity
-              </span>
-              <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${isReassessed ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                {isReassessed ? 'AST + Incident Stream Active' : 'Source AST Active'}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                {isReassessed ? 'Policy docs & SQL schema scheduled' : 'Incident & ticket stream pending Phase 3'}
-              </div>
-            </div>
-          </div>
-
-          {/* If analyzed, show preview of discovered business rules */}
-          {isAnalyzed && (
-            <div className={`p-4 rounded-xl border space-y-2 text-xs ${
-              isReassessed 
-                ? 'bg-amber-50/50 border-amber-200' 
-                : 'bg-blue-50/50 border-blue-100'
-            }`}>
-              <div className="flex items-center justify-between font-semibold">
-                <span className={isReassessed ? 'text-amber-950 flex items-center gap-1.5' : 'text-blue-950'}>
-                  {isReassessed && <AlertTriangle className="w-4 h-4 text-amber-600" />}
-                  {isReassessed ? 'Reassessed Rule BR-001 (Contradiction Flagged):' : 'Key Business Rule Discovered in Initial Analysis:'}
-                </span>
-                <span className={`font-mono text-[11px] px-2 py-0.5 rounded ${
-                  isReassessed 
-                    ? 'text-rose-700 bg-rose-100/70 font-bold' 
-                    : 'text-blue-700 bg-blue-100/70'
-                }`}>
-                  {isReassessed ? 'BR-001 • Disputed in v2.0' : 'Rule BR-001 (Line 2)'}
-                </span>
-              </div>
-              <p className="text-slate-700 leading-relaxed">
-                {isReassessed ? (
-                  <span>
-                    Initial rule charged ₹50 for balance &lt; 1,000. <strong>Incident INC-101 indicates customers with approved payment extensions should be exempt.</strong> Modernization verdict changed from "Direct Refactor" to "Investigate Policy".
-                  </span>
-                ) : (
-                  <span>
-                    Accounts with balances below <strong>₹1,000</strong> are automatically assessed a <strong>₹50 penalty</strong> in <code className="text-blue-900 bg-blue-100/50 px-1 py-0.5 rounded font-mono">calculate_penalty(balance)</code>.
-                  </span>
-                )}
+            <div className="space-y-4 text-xs text-slate-700">
+              <p className="leading-relaxed">
+                The banking core application is representative of mission-critical batch and online transaction processing (OLTP) workloads running across commercial banking platforms. LegacyIQ analyzes the PROCEDURE DIVISION to identify calculation routines and separates business policies from runtime infrastructure.
               </p>
-              <div className="pt-1 flex items-center gap-3 text-[11px] text-slate-500">
-                <span>• Observed fact: <code className="text-slate-700">if balance &lt; 1000: return 50</code></span>
-                <span>• Certainty score: <strong className={isReassessed ? 'text-rose-700' : 'text-slate-700'}>{isReassessed ? '64% (Requires Validation)' : '94%'}</strong></span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase font-mono block">
+                    Source Program
+                  </span>
+                  <div className="font-mono font-bold text-slate-900">{activeFile?.name || 'PENALTY.cbl'}</div>
+                  <p className="text-[11px] text-slate-500">
+                    Evaluates minimum balance maintenance fees (<code className="text-slate-800">BR-001</code>).
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase font-mono block">
+                    Linked Copybook
+                  </span>
+                  <div className="font-mono font-bold text-slate-900">ACCTREC.cpy</div>
+                  <p className="text-[11px] text-slate-500">
+                    Defines <code className="text-slate-800">WS-ACCOUNT-RECORD</code> and customer extension status flag.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase font-mono block">
+                    Java 21 Target
+                  </span>
+                  <div className="font-mono font-bold text-blue-700">PenaltyCalculationService</div>
+                  <p className="text-[11px] text-slate-500">
+                    Spring Boot 3.3.x domain service utilizing immutable Records and BigDecimal.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                <div className="font-semibold text-slate-900">
+                  Primary Modernization Steps:
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-600 font-mono">1.</span>
+                    <span><strong>GitHub COBOL Ingestion:</strong> Ingest .cbl, .cob, or .cpy directly from GitHub URL via <code>/api/sources/github</code>.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-600 font-mono">2.</span>
+                    <span><strong>Source AST & Rules:</strong> Isolate paragraphs and extract conditions into plain English via <code>legacyiq_engine</code>.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-600 font-mono">3.</span>
+                    <span><strong>Evidence Corroboration:</strong> Reconcile findings against tickets (INC-101) to detect blindspots via <code>/api/projects/{'{id}'}/evidence</code>.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-600 font-mono">4.</span>
+                    <span><strong>Gated Assessment:</strong> Generate Java 21 specification and characterization regression tests via <code>/api/projects/{'{id}'}/report</code>.</span>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+          </Card>
         </div>
-      </Card>
 
-      {/* Three Core Innovations Architecture Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card
-          title="Innovation 1"
-          subtitle="Adaptive Evidence Intelligence"
-          badge={<Badge variant={isReassessed ? 'success' : 'purple'}>{isReassessed ? 'v2.0 Active' : 'Phase 3'}</Badge>}
-          className="hover:border-blue-300 transition-all"
-        >
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-600">
-              Dynamically ingests post-release incidents and tickets, links them to previously discovered code components, and flags conflicting assumptions.
-            </div>
-            <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Continuous evidence updates</li>
-              <li>Contradictory rule alerts</li>
-              <li>Versioned analysis diffs (v1 → v2)</li>
-            </ul>
-            <div className="pt-2">
-              <Button
-                variant={isReassessed ? 'primary' : 'subtle'}
-                size="xs"
-                className="w-full justify-between"
-                icon={ArrowRight}
-                iconPosition="right"
-                onClick={() => onNavigate('adaptive-intelligence')}
-              >
-                {isReassessed ? 'Inspect v1 vs v2 Comparison' : 'Inspect Adaptive Engine'}
-              </Button>
-            </div>
-          </div>
-        </Card>
+        {/* Right: Technical Truthfulness & Implementation Status */}
+        <div className="lg:col-span-4 space-y-4">
+          <Card
+            title="Backend Integration Status"
+            subtitle="Actual endpoints connected to the FastAPI engine"
+            badge={<Badge variant="neutral">Truthfulness Audit</Badge>}
+          >
+            <div className="space-y-3 text-xs">
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900">GitHub File Ingestion</span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">
+                    POST /api/sources/github
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Validates public GitHub URL, fetches text content with timeout, and checks extensions.
+                </p>
+              </div>
 
-        <Card
-          title="Innovation 2"
-          subtitle="Evidence-Gated Decisions"
-          badge={<Badge variant="info">Phase 4</Badge>}
-          className="hover:border-blue-300 transition-all"
-        >
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-600">
-              Eliminates ungrounded LLM hallucinations by requiring verifiable evidence citations before recommending Retain, Refactor, Replace, or Remove.
-            </div>
-            <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Observed vs Documented flags</li>
-              <li>Explicit uncertainty tags</li>
-              <li>Human approval sign-off gate</li>
-            </ul>
-            <div className="pt-2">
-              <Button
-                variant="subtle"
-                size="xs"
-                className="w-full justify-between"
-                icon={ArrowRight}
-                iconPosition="right"
-                onClick={() => onNavigate('decision-center')}
-              >
-                Inspect Decision Center
-              </Button>
-            </div>
-          </div>
-        </Card>
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900">COBOL AST & Rules</span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">
+                    POST /api/projects
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Parses PROCEDURE DIVISION paragraphs, IF/WHEN conditions, and extracts rule candidates.
+                </p>
+              </div>
 
-        <Card
-          title="Innovation 3"
-          subtitle="Modernization Blast Radius"
-          badge={<Badge variant="warning">Phase 5</Badge>}
-          className="hover:border-blue-300 transition-all"
-        >
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-600">
-              Interactive dependency graph and impact simulator predicting database column ripples and auto-generating characterization regression test cases.
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900">Evidence Reassessment</span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">
+                    POST .../evidence
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Correlates incident text with rules, updates risk scores, and tracks versions in history store.
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900">Modernization Assessment</span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">
+                    GET .../report
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Builds comprehensive report with risk factors, 4R recommendations, and phased sequence.
+                </p>
+              </div>
             </div>
-            <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Multi-tier blast radius graph</li>
-              <li>4R modernization action simulator</li>
-              <li>Automated regression scenario specs</li>
-            </ul>
-            <div className="pt-2">
-              <Button
-                variant="subtle"
-                size="xs"
-                className="w-full justify-between"
-                icon={ArrowRight}
-                iconPosition="right"
-                onClick={() => onNavigate('impact-simulator')}
-              >
-                Inspect Impact Simulator
-              </Button>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );
