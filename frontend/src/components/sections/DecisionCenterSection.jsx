@@ -17,6 +17,8 @@ import {
   getDecisionRecords, 
   getDecisionMetrics 
 } from '../../data/mockDecisionData';
+import { useProject } from '../../context/ProjectContext';
+import { toDecisionRecords } from '../../data/liveAdapters';
 
 export default function DecisionCenterSection({
   isReassessed = false,
@@ -26,16 +28,19 @@ export default function DecisionCenterSection({
   const [selectedId, setSelectedId] = useState('DEC-001');
   const [approvalOverrides, setApprovalOverrides] = useState({});
 
-  // Compute records dynamically based on Phase 3 adaptive reassessment state and user approval actions
+  // Live records from the backend when a project is loaded. Mock records are used only without one.
+  const { findings, historyMap } = useProject();
+  // Compute records dynamically based on live analysis and user approval actions
   const decisionRecords = useMemo(() => {
-    const baseRecords = getDecisionRecords(isReassessed);
+    const liveRecords = findings && findings.length > 0 ? toDecisionRecords(findings, historyMap) : null;
+    const baseRecords = liveRecords || getDecisionRecords(isReassessed);
     return baseRecords.map(rec => {
       if (approvalOverrides[rec.id]) {
         return { ...rec, ...approvalOverrides[rec.id] };
       }
       return rec;
     });
-  }, [isReassessed, approvalOverrides]);
+  }, [isReassessed, approvalOverrides, findings, historyMap]);
 
   const metrics = getDecisionMetrics(decisionRecords);
 
