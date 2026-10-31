@@ -56,3 +56,34 @@ uvicorn main:app --reload
 ```
 
 Health check: http://127.0.0.1:8000/api/health
+
+## Tech Stack
+
+Project: **LegacyIQ**, an evidence-driven legacy application modernization assistant. Core flow: **Understand, Verify, Adapt, Assess, Recommend**.
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | React + Vite | Builds the user interface |
+| Frontend | Tailwind CSS | Styles the interface |
+| Frontend | React Flow | Displays component relationships |
+| Frontend | Recharts | Displays risk and analysis summaries |
+| Backend | FastAPI | Connects frontend requests to Python logic |
+| Backend | Pydantic | Validates structured inputs and outputs |
+| Analysis | Python `ast` (stdlib) | Reads Python structure without executing it |
+| Analysis | SQLGlot | Parses SQL and finds database relationships |
+| AI | External LLM API | Explains business meaning and correlates evidence |
+| Storage | SQLite | Stores findings, evidence and analysis history |
+
+**Static analysis states facts, AI explains them.** The `ast` and SQLGlot layers say what the code does (a function exists, a condition checks a balance, a call happens on line 12). The LLM only suggests what it may mean. Its output must never replace a verified fact.
+
+**Rules for everyone**
+1. Never execute uploaded source code.
+2. Never invent line numbers. Every finding points to a real file and line.
+3. Keep code behaviour separate from inferred business requirements.
+4. Incidents are evidence, not approved policy.
+5. "No references found" does not mean unused.
+6. Every risk score and recommendation must explain its reasons.
+7. Keep previous findings when new evidence arrives.
+8. A human reviews every consequential modernization decision.
+
+**Scope for the hackathon:** Python only. Java, C++ and other parsers, automatic code rewriting, runtime monitoring, and multi-agent systems are out of scope until the core workflow works.
