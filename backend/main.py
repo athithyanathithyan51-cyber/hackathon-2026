@@ -80,7 +80,7 @@ def _analyze(source):
     if path.endswith(".py"):
         return analyze_source(source.content, file_path=source.path)
     if path.endswith((".cbl", ".cob")):
-        return analyze_cobol(source.path, source.content)
+        return analyze_cobol(source.content, file_path=source.path)
     return None
 
 
@@ -88,7 +88,8 @@ def _risk_for(project, version):
     """Risk with live context: external calls from the project's dependency map."""
     key_prefix = version.finding.source_file
     calls = project["dependencies"].get(f"{key_prefix}:{version.finding.function_name}", [])
-    external = [call for call in calls if call.startswith("CALL:")]
+    known = {key.split(":")[-1] for key in project["dependencies"]}
+    external = [call for call in calls if call.split(":")[-1] not in known]
     return assess_risk(version.finding, evidence_matches=version.evidence_matches, external_calls=external)
 
 
@@ -204,6 +205,8 @@ def list_findings(project_id: str):
             "start_line": version.finding.start_line,
             "version": version.version,
             "description": version.finding.business_rule_description,
+            "condition": version.finding.observed_condition,
+            "observed_behavior": version.finding.observed_behavior,
             "evidence_status": version.finding.evidence_status.value,
             "risk_score": risk.risk_score if risk else None,
             "risk_category": risk.risk_category.value if risk else None,
@@ -376,3 +379,32 @@ def get_report(project_id: str):
     plan = generate_plan(project_id)
     history = history_for(project_id)
     return build_report(project, plan, lambda version: _risk_for(project, version), history)
+
+
+@app.get("/api/projects/{project_id}/functions")
+def list_functions(project_id: str):
+    """Every function or paragraph in the project, with its callers and callees."""
+    project = _project_or_404(project_id)
+    dependencies = project["dependencies"]
+    functions = []
+    for source in project["files"]:
+        result = _analyze(SourceFile(**source))
+        if result is None or not result.syntax_valid:
+            continue
+        for func in result.functions:
+            key = f"{source['path']}:{func.name}"
+            callers = sorted(
+                other_key for other_key, calls in dependencies.items()
+                if func.name in calls and other_key != key
+            )
+            functions.append({
+                "file": source["path"],
+                "function": func.name,
+                "start_line": func.start_line,
+                "end_line": func.end_line,
+                "conditions": len(func.conditions),
+                "returns": len(func.returns),
+                "calls": sorted({call.callee_name for call in func.calls}),
+                "called_by": callers,
+            })
+    return functions

@@ -12,6 +12,8 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { COBOL_BUSINESS_RULES } from '../../data/mockCobolData';
+import { useProject } from '../../context/ProjectContext';
+import { toRuleCards } from '../../data/liveAdapters';
 
 export default function BusinessRulesSection({
   isReassessed = false,
@@ -19,9 +21,12 @@ export default function BusinessRulesSection({
 }) {
   const [selectedRuleId, setSelectedRuleId] = useState('BR-001');
   const [filter, setFilter] = useState('ALL'); // 'ALL' | 'SUPPORTED' | 'DISPUTED'
+  const { findings } = useProject();
+  // Live findings from the backend. The mock rules are used only when no project is loaded.
+  const liveRules = findings && findings.length > 0 ? toRuleCards(findings) : null;
 
-  const rules = COBOL_BUSINESS_RULES.map(rule => {
-    if (rule.id === 'BR-001' && isReassessed) {
+  const rules = (liveRules || COBOL_BUSINESS_RULES).map(rule => {
+    if (!liveRules && rule.id === 'BR-001' && isReassessed) {
       return {
         ...rule,
         verificationStatus: 'CONFLICTING',
