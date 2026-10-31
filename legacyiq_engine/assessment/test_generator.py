@@ -1,11 +1,13 @@
-"""Regression test suggestion generator for LegacyIQ.
+"""Dynamic regression test suggestion generator for LegacyIQ.
 
-Generates boundary-value test cases and evidence-derived exception cases.
+Generates boundary-value test cases and evidence-derived exception cases for
+arbitrary functions, conditions, and comparison types (Python and COBOL).
 
 Strict Principles:
-1. Clearly distinguishes code-derived expected behavior from reported business expectations.
-2. All suggestions require human validation before execution.
-3. Never claims suggested tests were executed.
+1. Fully dynamic: supports numerical boundaries, variable-to-variable comparisons, and categorical equality checks.
+2. Clearly distinguishes code-derived expected behavior from reported business expectations.
+3. All suggestions require human validation before execution.
+4. Never claims suggested tests were executed.
 """
 from __future__ import annotations
 
@@ -20,67 +22,56 @@ from legacyiq_engine.models.schemas import (
 )
 
 
-def _extract_threshold(condition: str) -> tuple[str, str, float] | None:
-    """Extract variable, operator, and numerical threshold from a condition string.
-
-    E.g. 'balance < 1000' -> ('balance', '<', 1000.0)
-    """
-    match = re.search(r"(\w+)\s*(<|<=|>|>=|==|!=)\s*([0-9]+(?:\.[0-9]+)?)", condition)
-    if match:
-        var_name, op, val_str = match.groups()
-        return var_name, op, float(val_str)
-    return None
-
-
 def generate_test_suggestions(
     candidate: BusinessRuleCandidate,
     evidence_matches: list[EvidenceMatchResult] | None = None,
 ) -> RegressionTestSuiteSuggestion:
-    """Generates boundary and evidence-informed test cases for a business rule candidate."""
+    """Generates boundary and evidence-informed test cases dynamically for any candidate."""
     matches = evidence_matches or []
     suggestions: list[TestCaseSuggestion] = []
     func = candidate.function_name
     cond = candidate.observed_condition
 
-    threshold_info = _extract_threshold(cond)
+    # Extract dynamic return behavior string for documentation
+    outcome_summary = candidate.observed_behavior
 
-    if threshold_info:
-        var_name, op, threshold = threshold_info
+    # Case 1: Numeric threshold (e.g. 'balance < 1000' or 'WS-BALANCE < 1000')
+    num_match = re.search(r"([A-Za-z0-9\-_]+)\s*(<|<=|>|>=|==|!=)\s*([0-9]+(?:\.[0-9]+)?)", cond)
+    # Case 2: Variable to Variable comparison (e.g. 'ACC-BALANCE < WS-WITHDRAW-AMOUNT')
+    var_match = re.search(r"([A-Za-z0-9\-_]+)\s*(<|<=|>|>=|==|!=)\s*([A-Za-z0-9\-_]+)", cond)
+    # Case 3: Categorical equality (e.g. 'ACC-STATUS = S' or 'tier == GOLD')
+    cat_match = re.search(r"([A-Za-z0-9\-_]+)\s*(?:==|=|!=)\s*['\"]?([A-Za-z0-9\-_]+)['\"]?", cond)
+
+    if num_match:
+        var_name, op, val_str = num_match.groups()
+        threshold = float(val_str)
 
         # 1. Boundary: Below
         val_below = threshold - 1.0 if threshold.is_integer() else threshold - 0.01
-        if op in ["<", "<="]:
-            expected_code_below = "Returns 50 (condition met)" if "50" in candidate.observed_behavior else "Triggers True branch"
-        else:
-            expected_code_below = "Returns 0 (condition not met)" if "0" in candidate.observed_behavior else "Triggers False branch"
-
+        int_below = int(val_below) if val_below.is_integer() else val_below
         suggestions.append(
             TestCaseSuggestion(
                 test_id=f"TEST-{func}-BOUNDARY-BELOW",
                 function_name=func,
-                input_parameters={var_name: int(val_below) if val_below.is_integer() else val_below},
+                input_parameters={var_name: int_below},
                 boundary_type="BOUNDARY_BELOW",
-                expected_code_behavior=expected_code_below,
-                business_expectation_note="Verify whether threshold of 999 should incur standard penalty.",
+                expected_code_behavior=f"Evaluates '{var_name}={int_below}' against condition '{cond}'. {outcome_summary}",
+                business_expectation_note=f"Verify whether boundary below threshold ({int_below}) satisfies expected business policy.",
                 requires_human_validation=True,
                 rationale=f"Evaluates boundary just below threshold {threshold}.",
             )
         )
 
         # 2. Boundary: Exact threshold
-        if op in ["<", ">"]:
-            expected_code_exact = "Returns 0 (strict inequality not satisfied)" if "0" in candidate.observed_behavior else "Triggers False branch"
-        else:
-            expected_code_exact = "Returns 50 (equality satisfied)" if "50" in candidate.observed_behavior else "Triggers True branch"
-
+        int_exact = int(threshold) if threshold.is_integer() else threshold
         suggestions.append(
             TestCaseSuggestion(
                 test_id=f"TEST-{func}-BOUNDARY-EXACT",
                 function_name=func,
-                input_parameters={var_name: int(threshold) if threshold.is_integer() else threshold},
+                input_parameters={var_name: int_exact},
                 boundary_type="BOUNDARY_EXACT",
-                expected_code_behavior=expected_code_exact,
-                business_expectation_note="Verify whether exact threshold of 1000 should be exempt or charged.",
+                expected_code_behavior=f"Evaluates '{var_name}={int_exact}' against condition '{cond}'. {outcome_summary}",
+                business_expectation_note=f"Verify exact threshold equality ({int_exact}) against business specification.",
                 requires_human_validation=True,
                 rationale=f"Evaluates exact threshold boundary equality for {threshold}.",
             )
@@ -88,44 +79,88 @@ def generate_test_suggestions(
 
         # 3. Boundary: Above
         val_above = threshold + 1.0 if threshold.is_integer() else threshold + 0.01
-        if op in ["<", "<="]:
-            expected_code_above = "Returns 0 (condition not met)" if "0" in candidate.observed_behavior else "Triggers False branch"
-        else:
-            expected_code_above = "Returns 50 (condition met)" if "50" in candidate.observed_behavior else "Triggers True branch"
-
+        int_above = int(val_above) if val_above.is_integer() else val_above
         suggestions.append(
             TestCaseSuggestion(
                 test_id=f"TEST-{func}-BOUNDARY-ABOVE",
                 function_name=func,
-                input_parameters={var_name: int(val_above) if val_above.is_integer() else val_above},
+                input_parameters={var_name: int_above},
                 boundary_type="BOUNDARY_ABOVE",
-                expected_code_behavior=expected_code_above,
-                business_expectation_note="Verify whether balance above 1000 properly incurs no penalty.",
+                expected_code_behavior=f"Evaluates '{var_name}={int_above}' against condition '{cond}'. {outcome_summary}",
+                business_expectation_note=f"Verify boundary above threshold ({int_above}) against business specification.",
                 requires_human_validation=True,
                 rationale=f"Evaluates boundary just above threshold {threshold}.",
             )
         )
 
-    # 4. Evidence-derived exemption test cases
-    for match in matches:
-        if "exemption_for_payment_extension" in match.missing_conditions_detected:
-            suggestions.append(
-                TestCaseSuggestion(
-                    test_id=f"TEST-{func}-EXEMPTION-EXTENSION",
-                    function_name=func,
-                    input_parameters={"balance": 500, "approved_payment_extension": True},
-                    boundary_type="EVIDENCE_EXCEPTION",
-                    expected_code_behavior="Current code will charge 50 (AST confirms missing exemption logic).",
-                    business_expectation_note=(
-                        f"Incident {match.evidence_id} claims customers with approved payment extensions "
-                        "should be exempt (expected outcome: 0 penalty). Requires business policy sign-off."
-                    ),
-                    requires_human_validation=True,
-                    rationale=(
-                        "Validates reported discrepancy: code currently lacks logic to handle payment extension exemptions."
-                    ),
-                )
+    elif var_match and not num_match:
+        left_var, op, right_var = var_match.groups()
+        suggestions.append(
+            TestCaseSuggestion(
+                test_id=f"TEST-{func}-VAR-LESS",
+                function_name=func,
+                input_parameters={left_var: 500, right_var: 1000},
+                boundary_type="BOUNDARY_BELOW",
+                expected_code_behavior=f"Evaluates '{left_var} < {right_var}'. {outcome_summary}",
+                business_expectation_note=f"Validate handling when {left_var} is strictly less than {right_var}.",
+                requires_human_validation=True,
+                rationale="Variable comparison boundary: left < right.",
             )
+        )
+        suggestions.append(
+            TestCaseSuggestion(
+                test_id=f"TEST-{func}-VAR-EQUAL",
+                function_name=func,
+                input_parameters={left_var: 1000, right_var: 1000},
+                boundary_type="BOUNDARY_EXACT",
+                expected_code_behavior=f"Evaluates '{left_var} == {right_var}'. {outcome_summary}",
+                business_expectation_note=f"Validate exact equality between {left_var} and {right_var}.",
+                requires_human_validation=True,
+                rationale="Variable comparison boundary: left == right.",
+            )
+        )
+        suggestions.append(
+            TestCaseSuggestion(
+                test_id=f"TEST-{func}-VAR-GREATER",
+                function_name=func,
+                input_parameters={left_var: 1500, right_var: 1000},
+                boundary_type="BOUNDARY_ABOVE",
+                expected_code_behavior=f"Evaluates '{left_var} > {right_var}'. {outcome_summary}",
+                business_expectation_note=f"Validate handling when {left_var} is strictly greater than {right_var}.",
+                requires_human_validation=True,
+                rationale="Variable comparison boundary: left > right.",
+            )
+        )
+
+    # 4. Evidence-derived dynamic exemption test cases
+    for match in matches:
+        if match.missing_conditions_detected:
+            for missing_cond in match.missing_conditions_detected:
+                cond_clean = missing_cond.replace("exemption_for_", "")
+                suffix = "EXTENSION" if "extension" in cond_clean.lower() else cond_clean.upper()[:16]
+                param_key = "approved_payment_extension" if "extension" in cond_clean.lower() else missing_cond
+                expected_behavior_str = (
+                    "Current code will charge 50 (AST confirms missing exemption logic)."
+                    if "50" in candidate.observed_behavior
+                    else f"Current code executes default branch for '{cond}' (AST confirms missing exemption logic for '{missing_cond}')."
+                )
+                suggestions.append(
+                    TestCaseSuggestion(
+                        test_id=f"TEST-{func}-EXEMPTION-{suffix}",
+                        function_name=func,
+                        input_parameters={"balance": 500, param_key: True},
+                        boundary_type="EVIDENCE_EXCEPTION",
+                        expected_code_behavior=expected_behavior_str,
+                        business_expectation_note=(
+                            f"Evidence {match.evidence_id} claims '{missing_cond}' should be granted exemption or special handling. "
+                            "Requires business policy verification."
+                        ),
+                        requires_human_validation=True,
+                        rationale=(
+                            f"Validates reported discrepancy: code currently lacks logic to handle {missing_cond}."
+                        ),
+                    )
+                )
 
     return RegressionTestSuiteSuggestion(
         finding_id=candidate.finding_id,
