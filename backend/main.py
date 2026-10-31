@@ -11,6 +11,7 @@ from legacyiq_engine.analyzer.cobol_analyzer import analyze_cobol
 from legacyiq_engine.analyzer.rule_extractor import extract_rule_candidates
 from legacyiq_engine.assessment.risk_assessor import assess_risk
 from legacyiq_engine.assessment.test_generator import generate_test_suggestions
+from legacyiq_engine.intelligence.ai_interpreter import interpret_rule_candidate
 from legacyiq_engine.intelligence.evidence_matcher import match_evidence_to_rules
 from legacyiq_engine.intelligence.reassessment import (
     initialize_finding_version,
@@ -79,6 +80,32 @@ def _analyze(source):
     if path.endswith((".cbl", ".cob")):
         return analyze_cobol(source.path, source.content)
     return None
+
+
+def _risk_for(project, version):
+    """Risk with live context: external calls from the project's dependency map."""
+    key_prefix = version.finding.source_file
+    calls = project["dependencies"].get(f"{key_prefix}:{version.finding.function_name}", [])
+    external = [call for call in calls if call.startswith("CALL:")]
+    return assess_risk(version.finding, evidence_matches=version.evidence_matches, external_calls=external)
+
+
+def _java_name(cobol_name):
+    parts = [part.lower() for part in cobol_name.replace("_", "-").split("-") if part]
+    return parts[0] + "".join(part.capitalize() for part in parts[1:]) if parts else "rule"
+
+
+def _java_skeleton(finding):
+    """A documented Java method stub. The rule is not translated until a business owner validates it."""
+    name = _java_name(finding.function_name)
+    lines = [
+        f"// Source: {finding.source_file}:{finding.start_line} (paragraph {finding.function_name})",
+        f"// COBOL condition: {finding.observed_condition}",
+        "// TODO: translate after business sign-off; do not change behaviour silently.",
+        f"public void {name}() {{",
+        "}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _recommend(risk, matches):
@@ -185,7 +212,7 @@ def list_findings(project_id: str):
     findings = []
     for fid in project["finding_ids"]:
         version = _latest(history, fid)
-        risk = version.risk_assessment
+        risk = _risk_for(project, version)
         findings.append({
             "id": fid,
             "function": version.finding.function_name,
@@ -231,7 +258,7 @@ def impact(project_id: str, request: ImpactRequest):
 
     candidate = version.finding
     matches = version.evidence_matches
-    risk = assess_risk(candidate, evidence_matches=matches)
+    risk = _risk_for(project, version)
     tests = generate_test_suggestions(candidate, evidence_matches=matches)
     affected = [key for key, calls in project["dependencies"].items() if candidate.function_name in calls]
 
@@ -263,10 +290,85 @@ def overview(project_id: str):
         "rule_candidates": len(versions),
         "risks": sum(
             1 for v in versions
-            if v.risk_assessment and v.risk_assessment.risk_category.value in ("HIGH", "CRITICAL")
+            if _risk_for(project, v).risk_category.value in ("HIGH", "CRITICAL")
         ),
         "evidence_conflicts": sum(
             1 for v in versions
             if any(m.relationship_status == RelationshipStatus.CONFLICTED for m in v.evidence_matches)
         ),
+    }
+
+
+@app.post("/api/projects/{project_id}/plan")
+def generate_plan(project_id: str):
+    """Build a modernization plan from the findings. Suggestions only; nothing is changed."""
+    project = _project_or_404(project_id)
+    history = history_for(project_id)
+    items = []
+    for fid in project["finding_ids"]:
+        version = _latest(history, fid)
+        candidate = version.finding
+        risk = _risk_for(project, version)
+        interpretation = interpret_rule_candidate(candidate)
+        items.append({
+            "id": fid,
+            "function": candidate.function_name,
+            "file": candidate.source_file,
+            "start_line": candidate.start_line,
+            "condition": candidate.observed_condition,
+            "risk_category": risk.risk_category.value,
+            "risk_score": risk.risk_score,
+            "blocked": any(f.factor_name == "External Command Execution" for f in risk.factors),
+            "recommendation": _recommend(risk, version.evidence_matches),
+            "interpretation": {
+                "business_explanation": interpretation.business_explanation,
+                "questions": interpretation.questions_for_human_validation,
+                "model": interpretation.model_used,
+                "is_fallback": interpretation.is_fallback,
+            },
+            "java_skeleton": _java_skeleton(candidate),
+        })
+
+    def where(item):
+        return f"{item['function']} ({item['file']}:{item['start_line']})"
+
+    phases = [
+        {
+            "name": "Stop and fix first",
+            "actions": [
+                f"{where(i)} runs an operating-system command. Replace it with an explicit, tested service call."
+                for i in items if i["blocked"]
+            ],
+        },
+        {
+            "name": "Phase 1: validate and characterize",
+            "actions": [
+                f"Get business sign-off on {where(i)}, then write golden-master tests for its boundary values."
+                for i in items if i["recommendation"] == "investigate" and not i["blocked"]
+            ],
+        },
+        {
+            "name": "Phase 2: refactor with tests",
+            "actions": [
+                f"Refactor {where(i)} only after its tests pass on the current system."
+                for i in items if i["recommendation"] == "refactor"
+            ],
+        },
+        {
+            "name": "Phase 3: migrate low-risk rules",
+            "actions": [
+                f"Migrate {where(i)} after Phase 1 tests are green."
+                for i in items if i["recommendation"] == "retain"
+            ],
+        },
+    ]
+    return {
+        "project_id": project_id,
+        "summary": {
+            "rules": len(items),
+            "blocked": sum(1 for i in items if i["blocked"]),
+            "investigate": sum(1 for i in items if i["recommendation"] == "investigate"),
+        },
+        "phases": phases,
+        "findings": items,
     }
