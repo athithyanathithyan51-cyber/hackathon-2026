@@ -17,6 +17,9 @@ import {
   INITIAL_TIMELINE_EVENTS, 
   REASSESSMENT_TIMELINE_EVENTS 
 } from '../../data/mockAdaptiveData';
+import { useProject } from '../../context/ProjectContext';
+import { toTimelineEvents, toComparisonRows, toAssociation } from '../../data/liveAdapters';
+import { COMPARISON_FIELDS } from '../../data/mockAdaptiveData';
 
 export default function AdaptiveIntelligenceSection({
   isReassessed = false,
@@ -26,12 +29,17 @@ export default function AdaptiveIntelligenceSection({
   onNavigate
 }) {
   const [isSubmitted, setIsSubmitted] = useState(Boolean(stagedIncident));
+  const { findings, historyMap, evidenceLog, submitEvidence, isBackendOnline } = useProject();
+  // Live data when a project is loaded. Mock data is used only when no project exists.
+  const isLive = Boolean(findings && findings.length > 0);
+  const liveAssociation = isLive ? toAssociation(evidenceLog[0], findings) : null;
   const [isReassessing, setIsReassessing] = useState(false);
   const [reassessProgress, setReassessProgress] = useState(0);
   const [reassessStep, setReassessStep] = useState('');
 
   // Dynamically constructed timeline based on user progression
   const getTimelineEvents = () => {
+    if (isLive) return toTimelineEvents(findings, historyMap, evidenceLog);
     let events = [...INITIAL_TIMELINE_EVENTS];
     if (isSubmitted && stagedIncident) {
       events.push(REASSESSMENT_TIMELINE_EVENTS[0]); // INC-101 ingested
@@ -86,8 +94,13 @@ export default function AdaptiveIntelligenceSection({
       setReassessStep('4/4 Minting immutable v2.0 analysis snapshot while preserving v1.0 baseline...');
     }, 1250);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsReassessing(false);
+      if (isBackendOnline && isLive && stagedIncident) {
+        // Send the evidence to the backend. Only mark the analysis reassessed if the backend accepted it.
+        const accepted = await submitEvidence(stagedIncident.id, stagedIncident.description);
+        if (!accepted) return;
+      }
       setIsReassessed(true);
     }, 1550);
   };
@@ -159,9 +172,10 @@ export default function AdaptiveIntelligenceSection({
       />
 
       {/* Area C & D: Evidence Association & Classification */}
-      {isSubmitted && stagedIncident && (
+      {isSubmitted && stagedIncident && (!isLive || liveAssociation) && (
         <EvidenceAssociationCard
           incident={stagedIncident}
+          association={isLive ? liveAssociation : undefined}
         />
       )}
 
@@ -181,6 +195,7 @@ export default function AdaptiveIntelligenceSection({
       {isReassessed && (
         <VersionComparisonTable
           isReassessed={isReassessed}
+          rows={isLive ? toComparisonRows(findings, historyMap) : COMPARISON_FIELDS}
         />
       )}
 

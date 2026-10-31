@@ -43,6 +43,7 @@ export function ProjectProvider({ children }) {
   const [report, setReport] = useState(null);
   const [impactMap, setImpactMap] = useState({});
   const [functions, setFunctions] = useState([]);
+  const [historyMap, setHistoryMap] = useState({});
 
   // Evidence state
   const [isReassessed, setIsReassessed] = useState(false);
@@ -88,6 +89,12 @@ export function ProjectProvider({ children }) {
         analysisService.getImpact(pid, f.id).then((r) => [f.id, r]).catch(() => null)
       ));
       setImpactMap(Object.fromEntries(impacts.filter(Boolean)));
+
+      // Version history for every finding (baseline and reassessed versions). No AI calls.
+      const histories = await Promise.all((fnd || []).map((f) =>
+        evidenceService.getFindingHistory(pid, f.id).then((h) => [f.id, h]).catch(() => null)
+      ));
+      setHistoryMap(Object.fromEntries(histories.filter(Boolean)));
     } catch (err) {
       console.warn('Error refreshing project analysis data from backend:', err);
     }
@@ -231,8 +238,10 @@ export function ProjectProvider({ children }) {
       // Refresh project findings, overview, plan, and report with new versions
       await refreshProjectData(projectId);
       setAnalysisSuccess(`Evidence ${evidenceName} processed: Rule reassessment executed.`);
+      return true;
     } catch (err) {
       setAnalysisError(err.message || 'Failed to add evidence.');
+      return false;
     } finally {
       setIsAnalyzing(false);
     }
@@ -382,6 +391,7 @@ export function ProjectProvider({ children }) {
     report,
     impactMap,
     functions,
+    historyMap,
 
     // Evidence & Reassessment
     isReassessed,

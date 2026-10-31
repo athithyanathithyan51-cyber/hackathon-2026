@@ -122,3 +122,93 @@ export function toRegressionScenarios(impactMap, findings) {
   });
   return scenarios;
 }
+
+/**
+ * Timeline events from live analysis: baseline versions, evidence submissions and new versions.
+ * Shape matches EvidenceTimeline and AnalysisHistorySection.
+ */
+export function toTimelineEvents(findings, historyMap, evidenceLog) {
+  const events = [];
+  findings.forEach((f) => {
+    const versions = historyMap[f.id] || [];
+    versions.forEach((v) => {
+      const isBaseline = v.version === 1;
+      events.push({
+        id: `${f.id}-v${v.version}`,
+        timestamp: v.timestamp,
+        title: isBaseline ? 'Business rule extracted' : `Version ${v.version} recorded`,
+        category: isBaseline ? 'Analysis' : 'Reassessment',
+        description: `${f.function} (${f.file}:${f.start_line}): ${v.change_reason}`,
+        badge: isBaseline ? 'v1.0 Baseline' : `v${v.version}.0`,
+        badgeVariant: isBaseline ? 'neutral' : 'success',
+        linkedId: f.id
+      });
+    });
+  });
+  (evidenceLog || []).forEach((entry, idx) => {
+    const linked = entry.linked_findings || [];
+    events.push({
+      id: `evidence-${idx}`,
+      timestamp: 'This session',
+      title: `Evidence ${entry.evidence} processed`,
+      category: 'Evidence',
+      description: linked.length
+        ? `Linked to ${linked.length} rule(s): ${linked.map((l) => `${l.match.toLowerCase()} (${l.finding_id})`).join(', ')}`
+        : 'No rule matched this evidence.',
+      badge: `${linked.length} linked`,
+      badgeVariant: linked.length ? 'warning' : 'neutral',
+      linkedId: entry.evidence
+    });
+  });
+  return events;
+}
+
+/**
+ * Version comparison rows (v1 baseline vs latest) for the first finding that has more than one version.
+ * Returns an empty list when nothing has been reassessed yet.
+ */
+export function toComparisonRows(findings, historyMap) {
+  const changed = findings.find((f) => (historyMap[f.id] || []).length > 1);
+  if (!changed) return [];
+  const versions = historyMap[changed.id];
+  const first = versions[0];
+  const last = versions[versions.length - 1];
+  const row = (field, a, b) => ({
+    field,
+    v1: String(a ?? '—'),
+    v2: String(b ?? '—'),
+    changed: String(a) !== String(b)
+  });
+  return [
+    row('Business understanding', first.change_reason, last.change_reason),
+    row('Evidence status', first.evidence_status, last.evidence_status),
+    row('Risk category', first.risk_category, last.risk_category),
+    row('Risk score', first.risk_score, last.risk_score),
+    row('Version', `v${first.version}`, `v${last.version}`)
+  ];
+}
+
+/**
+ * Evidence-to-rule association for the latest evidence submission.
+ * Shape matches EvidenceAssociationCard.
+ */
+export function toAssociation(evidenceEntry, findings) {
+  if (!evidenceEntry || !(evidenceEntry.linked_findings || []).length) return null;
+  const link = evidenceEntry.linked_findings[0];
+  const f = findings.find((x) => x.id === link.finding_id);
+  if (!f) return null;
+  const match = (f.evidence || []).find((e) => e.source === evidenceEntry.evidence);
+  return {
+    evidenceId: evidenceEntry.evidence,
+    matchedFunction: f.function,
+    matchedRuleId: f.id,
+    matchedRuleName: f.function,
+    sourceFile: f.file,
+    lineReference: `Lines ${f.start_line}`,
+    relationship: link.match,
+    relationshipType: link.match === 'CONFLICTED' ? 'conflicting' : 'supporting',
+    reason: match ? match.explanation : f.description,
+    confidenceImpact: `Evidence status now ${f.evidence_status.replace(/_/g, ' ').toLowerCase()}`,
+    uncertaintyFlag: 'Incident text is evidence, not approved policy. A business owner must confirm it.'
+  };
+}

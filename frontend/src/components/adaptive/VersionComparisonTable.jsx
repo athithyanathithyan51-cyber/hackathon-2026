@@ -3,7 +3,8 @@ import Badge from '../common/Badge';
 import { COMPARISON_FIELDS } from '../../data/mockAdaptiveData';
 
 export default function VersionComparisonTable({
-  isReassessed = false
+  isReassessed = false,
+  rows = COMPARISON_FIELDS
 }) {
   if (!isReassessed) return null;
 
@@ -33,7 +34,7 @@ export default function VersionComparisonTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {COMPARISON_FIELDS.map((row, idx) => {
+            {rows.map((row, idx) => {
               return (
                 <tr 
                   key={idx}
