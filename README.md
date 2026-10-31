@@ -26,20 +26,58 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 **Critical rule:** code that looks obsolete must not be marked removable if it implements an undocumented but critical business rule. Old technology alone is never a reason to delete or rewrite.
 
-## API Contract (v1)
+## API Contract (v2)
 
-All responses are JSON. Base path: `/api`.
+Base path `/api`. All bodies and responses are JSON. Status codes: `200` success, `404` unknown id, `422` invalid body or unparseable Python.
 
-| Method | Path | Body / Query | Response |
+**Status:** `Done` = implemented and tested on `main`. `Planned` = agreed, not built yet. Build planned endpoints against this contract; change it only through a PR.
+
+**Rules that apply to every endpoint**
+- Uploaded code is parsed, never executed.
+- Every finding carries a real `file` and `line`.
+- Results are stored, and previous findings are kept when evidence changes.
+
+### Projects and code intelligence (Done)
+
+| Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/analyses` | `{ "name": str, "artifacts": [{ "type": "code\|schema\|config\|interface\|doc\|incident\|ticket", "path": str, "content": str }] }` | `{ "id": str, "status": "queued" }` |
-| GET | `/api/analyses/{id}` | - | `{ "id", "name", "status": "queued\|running\|done\|failed" }` |
-| GET | `/api/analyses/{id}/business-rules` | - | `[{ "id", "description", "source", "evidence", "confidence", "critical", "documented" }]` |
-| GET | `/api/analyses/{id}/dependencies` | - | `{ "nodes": [{ "id", "type" }], "edges": [{ "from", "to", "kind" }] }` |
-| GET | `/api/analyses/{id}/heatmap` | - | `[{ "component", "risk", "tech_debt", "obsolete", "verdict" }]` where `verdict` is `keep`, `review`, or `modernize` |
-| GET | `/api/analyses/{id}/report` | - | `{ "current_state", "tech_debt", "risks", "alternatives", "target_architecture", "roadmap", "test_strategy" }` |
+| GET | `/api/health` | - | `{ "status": "ok" }` |
+| POST | `/api/projects` | `{ "name": str, "files": [{ "path": str, "content": str }] }` | `{ "id", "name", "status": "done", "rule_count" }` |
+| GET | `/api/projects/{id}` | - | `{ "id", "name", "file_count", "rule_count" }` |
+| GET | `/api/projects/{id}/rules` | - | `[{ "function", "file", "line", "condition", "returns_if_true", "returns_otherwise" }]` |
+| GET | `/api/projects/{id}/dependencies` | - | `{ "<file>:<function>": ["<called function>", ...] }` |
 
-Status codes: `200` success, `404` unknown id, `422` invalid body.
+- Only `.py` files are analyzed. Other files are stored as evidence.
+- A syntax error returns `422` with `detail` = `"<file> line <n>: <message>"`.
+- `returns_if_true` and `returns_otherwise` are the constant values the branches return, or `null` when they are not simple constants.
+
+### Evidence and adaptive findings (Planned)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/projects/{id}/evidence` | `{ "type": "doc\|sql\|incident\|change_request", "name": str, "content": str }` | `{ "id", "linked_findings": [{ "finding_id", "match": "strong\|weak" }] }` |
+| GET | `/api/projects/{id}/findings` | - | `[{ "id", "rule", "evidence_status", "risk", "recommendation", "evidence": [{ "id", "type", "name", "stance": "supports\|conflicts" }] }]` |
+| GET | `/api/projects/{id}/findings/{finding_id}/history` | - | `[{ "version", "created_at", "evidence_status", "risk", "recommendation", "trigger_evidence_id" }]` |
+
+- `evidence_status` is one of `validated`, `incomplete` (needs validation), or `conflicting`.
+- Adding evidence never deletes a finding. It updates the finding and adds a history version.
+- An incident is evidence, not an approved policy, so it can at most move a finding to `incomplete`.
+
+### Impact analysis (Planned)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/projects/{id}/impact` | `{ "function": "<file>:<function>" }` | `{ "risk_score", "risk_reasons": [str], "affected": [str], "regression_tests": [{ "input", "expected", "note" }], "recommendation": "retain\|refactor\|replace\|investigate" }` |
+
+- `regression_tests` are suggestions, not verified results.
+- `recommendation` is always a suggestion for human review. Nothing is changed automatically.
+- Components with no found references are not assumed unused.
+
+### Overview (Planned)
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/api/projects/{id}/overview` | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
 ## Setup
 
