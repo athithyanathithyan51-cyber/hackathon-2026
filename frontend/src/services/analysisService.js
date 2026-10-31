@@ -44,6 +44,14 @@ export const analysisService = {
   },
 
   /**
+   * Retrieves every function or paragraph with its callers and callees.
+   * @param {string} projectId
+   */
+  async getFunctions(projectId) {
+    return await api.get(`/api/projects/${projectId}/functions`);
+  },
+
+  /**
    * Retrieves paragraph and function call dependencies.
    * @param {string} projectId
    */
