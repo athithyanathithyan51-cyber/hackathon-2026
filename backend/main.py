@@ -377,3 +377,32 @@ def get_report(project_id: str):
     plan = generate_plan(project_id)
     history = history_for(project_id)
     return build_report(project, plan, lambda version: _risk_for(project, version), history)
+
+
+@app.get("/api/projects/{project_id}/functions")
+def list_functions(project_id: str):
+    """Every function or paragraph in the project, with its callers and callees."""
+    project = _project_or_404(project_id)
+    dependencies = project["dependencies"]
+    functions = []
+    for source in project["files"]:
+        result = _analyze(SourceFile(**source))
+        if result is None or not result.syntax_valid:
+            continue
+        for func in result.functions:
+            key = f"{source['path']}:{func.name}"
+            callers = sorted(
+                other_key for other_key, calls in dependencies.items()
+                if func.name in calls and other_key != key
+            )
+            functions.append({
+                "file": source["path"],
+                "function": func.name,
+                "start_line": func.start_line,
+                "end_line": func.end_line,
+                "conditions": len(func.conditions),
+                "returns": len(func.returns),
+                "calls": sorted({call.callee_name for call in func.calls}),
+                "called_by": callers,
+            })
+    return functions
