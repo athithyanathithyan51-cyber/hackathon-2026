@@ -68,12 +68,11 @@ export function ProjectProvider({ children }) {
     if (!pid) return;
 
     try {
-      const [ov, fnd, dep, rep, pln, fns] = await Promise.all([
+      const [ov, fnd, dep, rep, fns] = await Promise.all([
         projectService.getOverview(pid).catch(() => null),
         analysisService.getFindings(pid).catch(() => []),
         analysisService.getDependencies(pid).catch(() => ({})),
         reportService.getReport(pid).catch(() => null),
-        reportService.generatePlan(pid).catch(() => null),
         analysisService.getFunctions(pid).catch(() => [])
       ]);
 
@@ -81,8 +80,10 @@ export function ProjectProvider({ children }) {
       if (fnd) setFindings(fnd);
       if (dep) setDependencies(dep);
       if (rep) setReport(rep);
-      if (pln) setPlan(pln);
       if (fns) setFunctions(fns);
+
+      // The plan calls the AI for each rule, so load it in the background instead of blocking the screen.
+      reportService.generatePlan(pid).then((p) => { if (p) setPlan(p); }).catch(() => {});
 
       // Impact (blast radius and regression suggestions) for every finding. No AI calls.
       const impacts = await Promise.all((fnd || []).map((f) =>

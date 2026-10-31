@@ -29,7 +29,7 @@ export async function request(endpoint, options = {}) {
   };
 
   const controller = new AbortController();
-  const timeoutMs = options.timeout || 15000;
+  const timeoutMs = options.timeout || 60000; // AI explanations can take a while on large projects
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {

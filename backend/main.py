@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
@@ -47,6 +48,16 @@ class EvidenceRequest(BaseModel):
     content: str
 
 
+class AIInterpretationPlaceholder:
+    """Used when explanations are not requested. Keeps the plan shape the same."""
+
+    def __init__(self, candidate):
+        self.business_explanation = candidate.business_rule_description
+        self.questions_for_human_validation = []
+        self.model_used = "not-requested"
+        self.is_fallback = True
+
+
 class ImpactRequest(BaseModel):
     finding_id: str
 
@@ -93,6 +104,16 @@ def _risk_for(project, version):
     return assess_risk(version.finding, evidence_matches=version.evidence_matches, external_calls=external)
 
 
+_INTERPRETATIONS = {}
+
+
+def _interpret_cached(candidate):
+    """AI explanation per finding, computed once and reused. Finding IDs change when the code changes."""
+    if candidate.finding_id not in _INTERPRETATIONS:
+        _INTERPRETATIONS[candidate.finding_id] = interpret_rule_candidate(candidate)
+    return _INTERPRETATIONS[candidate.finding_id]
+
+
 def _recommend(risk, matches):
     """Suggest an action. Always a suggestion for human review, never applied automatically."""
     if risk.risk_category.value == "CRITICAL" or any(
@@ -128,7 +149,8 @@ def create_project(request: ProjectRequest):
         for name, calls in result.dependencies.items():
             dependencies[f"{source.path}:{name}"] = calls
         for candidate in extract_rule_candidates(result):
-            initialize_finding_version(candidate, history_store=history)
+            # Explanations are generated on demand by the plan endpoint, so upload stays fast
+            initialize_finding_version(candidate, history_store=history, explain=False)
             if candidate.finding_id not in finding_ids:
                 finding_ids.append(candidate.finding_id)
 
@@ -287,16 +309,27 @@ def overview(project_id: str):
 
 
 @app.post("/api/projects/{project_id}/plan")
-def generate_plan(project_id: str):
+def generate_plan(project_id: str, explain: bool = True):
     """Build a modernization plan from the findings. Suggestions only; nothing is changed."""
     project = _project_or_404(project_id)
     history = history_for(project_id)
-    items = []
+    entries = []
     for fid in project["finding_ids"]:
         version = _latest(history, fid)
+        entries.append((version, _risk_for(project, version)))
+
+    if explain:
+        # Run the AI calls in parallel. Results are cached per finding.
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            interpretations = list(pool.map(lambda entry: _interpret_cached(entry[0].finding), entries))
+    else:
+        interpretations = [None] * len(entries)
+
+    items = []
+    for (version, risk), interpretation in zip(entries, interpretations):
         candidate = version.finding
-        risk = _risk_for(project, version)
-        interpretation = interpret_rule_candidate(candidate)
+        if interpretation is None:
+            interpretation = AIInterpretationPlaceholder(candidate)
         items.append({
             "id": fid,
             "function": candidate.function_name,
@@ -376,7 +409,7 @@ def fetch_github_source(request: GitHubSourceRequest):
 @app.get("/api/projects/{project_id}/report")
 def get_report(project_id: str):
     project = _project_or_404(project_id)
-    plan = generate_plan(project_id)
+    plan = generate_plan(project_id, explain=False)
     history = history_for(project_id)
     return build_report(project, plan, lambda version: _risk_for(project, version), history)
 

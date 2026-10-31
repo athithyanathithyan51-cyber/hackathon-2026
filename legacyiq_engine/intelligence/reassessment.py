@@ -35,6 +35,7 @@ from legacyiq_engine.storage.history_store import HistoryStore
 def initialize_finding_version(
     candidate: BusinessRuleCandidate,
     history_store: Optional[HistoryStore] = None,
+    explain: bool = True,
 ) -> FindingVersion:
     """Store the initial (Version 1) baseline for an extracted business rule."""
     store = history_store or HistoryStore()
@@ -44,7 +45,7 @@ def initialize_finding_version(
         return existing
 
     risk = assess_risk(candidate, evidence_matches=[])
-    interp = interpret_rule_candidate(candidate)
+    interp = interpret_rule_candidate(candidate) if explain else None
 
     v1 = FindingVersion(
         version=1,
