@@ -1,122 +1,104 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import DashboardLayout from './components/layout/DashboardLayout';
+import OverviewSection from './components/sections/OverviewSection';
+import CodeEvidenceSection from './components/sections/CodeEvidenceSection';
+import AdaptiveIntelligenceSection from './components/sections/AdaptiveIntelligenceSection';
+import DecisionCenterSection from './components/sections/DecisionCenterSection';
+import ImpactSimulatorSection from './components/sections/ImpactSimulatorSection';
+import AnalysisHistorySection from './components/sections/AnalysisHistorySection';
+import { DEMO_BANKING_FILES, DISCOVERED_FUNCTIONS } from './data/mockBankingData';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [activeSection, setActiveSection] = useState('overview');
+  const [files, setFiles] = useState(DEMO_BANKING_FILES);
+  const [isAnalyzed, setIsAnalyzed] = useState(true); // Pre-analyzed banking app for smooth demo flow
+  const [selectedFunctionId, setSelectedFunctionId] = useState(DISCOVERED_FUNCTIONS[0].id);
+  const [stagedIncident, setStagedIncident] = useState(null);
+  const [isReassessed, setIsReassessed] = useState(false);
+
+  const handleLoadBankingDemo = () => {
+    setFiles(DEMO_BANKING_FILES);
+    setIsAnalyzed(true);
+    setSelectedFunctionId(DISCOVERED_FUNCTIONS[0].id);
+    setStagedIncident(null);
+    setIsReassessed(false);
+  };
+
+  const handleResetDemo = () => {
+    setFiles(DEMO_BANKING_FILES);
+    setIsAnalyzed(true);
+    setSelectedFunctionId(DISCOVERED_FUNCTIONS[0].id);
+    setStagedIncident(null);
+    setIsReassessed(false);
+    setActiveSection('overview');
+  };
+
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'overview':
+        return (
+          <OverviewSection
+            files={files}
+            isAnalyzed={isAnalyzed}
+            isReassessed={isReassessed}
+            onNavigate={setActiveSection}
+            onLoadBankingDemo={handleLoadBankingDemo}
+          />
+        );
+      case 'code-evidence':
+        return (
+          <CodeEvidenceSection
+            files={files}
+            setFiles={setFiles}
+            isAnalyzed={isAnalyzed}
+            setIsAnalyzed={setIsAnalyzed}
+            selectedFunctionId={selectedFunctionId}
+            setSelectedFunctionId={setSelectedFunctionId}
+            onLoadBankingDemo={handleLoadBankingDemo}
+            isReassessed={isReassessed}
+          />
+        );
+      case 'adaptive-intelligence':
+        return (
+          <AdaptiveIntelligenceSection
+            isReassessed={isReassessed}
+            setIsReassessed={setIsReassessed}
+            stagedIncident={stagedIncident}
+            setStagedIncident={setStagedIncident}
+            onNavigate={setActiveSection}
+          />
+        );
+      case 'decision-center':
+        return <DecisionCenterSection onNavigate={setActiveSection} />;
+      case 'impact-simulator':
+        return <ImpactSimulatorSection onNavigate={setActiveSection} />;
+      case 'analysis-history':
+        return (
+          <AnalysisHistorySection
+            isReassessed={isReassessed}
+            onNavigate={setActiveSection}
+          />
+        );
+      default:
+        return (
+          <OverviewSection
+            files={files}
+            isAnalyzed={isAnalyzed}
+            isReassessed={isReassessed}
+            onNavigate={setActiveSection}
+            onLoadBankingDemo={handleLoadBankingDemo}
+          />
+        );
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <DashboardLayout
+      activeSection={activeSection}
+      onSelectSection={setActiveSection}
+      onResetDemo={handleResetDemo}
+    >
+      {renderActiveSection()}
+    </DashboardLayout>
+  );
 }
-
-export default App
