@@ -10,11 +10,18 @@ import {
   INITIAL_TIMELINE_EVENTS, 
   REASSESSMENT_TIMELINE_EVENTS 
 } from '../../data/mockAdaptiveData';
+import { useProject } from '../../context/ProjectContext';
+import { toTimelineEvents } from '../../data/liveAdapters';
 
 export default function AnalysisHistorySection({
   isReassessed = false,
   onNavigate
 }) {
+  const { findings, historyMap, evidenceLog } = useProject();
+  const timelineEvents = findings && findings.length > 0
+    ? toTimelineEvents(findings, historyMap, evidenceLog)
+    : [...INITIAL_TIMELINE_EVENTS, ...(isReassessed ? REASSESSMENT_TIMELINE_EVENTS : [])];
+
   const versions = [
     {
       id: 'v1.0',
@@ -170,7 +177,7 @@ export default function AnalysisHistorySection({
         badge={<Badge variant="neutral">Audit Log</Badge>}
       >
         <div className="space-y-3">
-          {[...INITIAL_TIMELINE_EVENTS, ...(isReassessed ? REASSESSMENT_TIMELINE_EVENTS : [])].map((item, idx) => (
+          {timelineEvents.map((item, idx) => (
             <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-3">
                 <span className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center font-mono text-[10px] font-bold text-slate-600">
