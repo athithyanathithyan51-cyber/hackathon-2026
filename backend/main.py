@@ -5,6 +5,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from backend.report import build_report
+from backend.sources import SourceError, fetch_cobol_from_github
 from backend.store import history_for, load_project, save_project
 from legacyiq_engine.analyzer.ast_analyzer import analyze_source
 from legacyiq_engine.analyzer.cobol_analyzer import analyze_cobol
@@ -353,3 +355,24 @@ def generate_plan(project_id: str):
         "phases": phases,
         "findings": items,
     }
+
+
+class GitHubSourceRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/sources/github")
+def fetch_github_source(request: GitHubSourceRequest):
+    """Fetch and validate one COBOL file from a GitHub link. Returns its info and source text."""
+    try:
+        return fetch_cobol_from_github(request.url)
+    except SourceError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+
+@app.get("/api/projects/{project_id}/report")
+def get_report(project_id: str):
+    project = _project_or_404(project_id)
+    plan = generate_plan(project_id)
+    history = history_for(project_id)
+    return build_report(project, plan, lambda version: _risk_for(project, version), history)
