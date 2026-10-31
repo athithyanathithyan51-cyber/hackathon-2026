@@ -80,7 +80,7 @@ def _analyze(source):
     if path.endswith(".py"):
         return analyze_source(source.content, file_path=source.path)
     if path.endswith((".cbl", ".cob")):
-        return analyze_cobol(source.path, source.content)
+        return analyze_cobol(source.content, file_path=source.path)
     return None
 
 
@@ -88,7 +88,8 @@ def _risk_for(project, version):
     """Risk with live context: external calls from the project's dependency map."""
     key_prefix = version.finding.source_file
     calls = project["dependencies"].get(f"{key_prefix}:{version.finding.function_name}", [])
-    external = [call for call in calls if call.startswith("CALL:")]
+    known = {key.split(":")[-1] for key in project["dependencies"]}
+    external = [call for call in calls if call.split(":")[-1] not in known]
     return assess_risk(version.finding, evidence_matches=version.evidence_matches, external_calls=external)
 
 
