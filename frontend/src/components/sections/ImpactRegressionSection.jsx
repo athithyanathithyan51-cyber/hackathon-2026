@@ -7,29 +7,25 @@ import {
   ArrowRight, 
   Layers, 
   TestTube, 
-  CheckCircle2, 
-  Copy, 
-  Check 
+  CheckCircle2
 } from 'lucide-react';
 import { 
   REGRESSION_TEST_SCENARIOS 
 } from '../../data/mockCobolData';
+import { useProject } from '../../context/ProjectContext';
+import { toRegressionScenarios } from '../../data/liveAdapters';
 
 export default function ImpactRegressionSection({ 
   isReassessed = false, 
   onNavigate 
 }) {
   const [activeTab, setActiveTab] = useState('BLAST_RADIUS'); // 'BLAST_RADIUS' | '4R_SIMULATOR' | 'REGRESSION_TESTS'
+  const { findings, impactMap } = useProject();
+  // Live suggestions from the backend. The mock scenarios are used only when no project is loaded.
+  const liveScenarios = toRegressionScenarios(impactMap, findings);
+  const scenarios = liveScenarios.length > 0 ? liveScenarios : REGRESSION_TEST_SCENARIOS;
   const [selectedParagraph, setSelectedParagraph] = useState('2100-CALCULATE-PENALTY');
   const [selectedStrategy, setSelectedStrategy] = useState('REFACTOR');
-  const [copiedId, setCopiedId] = useState(null);
-
-  const handleCopyCode = (id, text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   // Paragraph dependency relationships
   const PARAGRAPH_DEPENDENCIES = {
     '2100-CALCULATE-PENALTY': {
@@ -493,7 +489,7 @@ export default function ImpactRegressionSection({
 
               {/* Scenarios Table */}
               <div className="space-y-3">
-                {REGRESSION_TEST_SCENARIOS.map((scen) => (
+                {scenarios.map((scen) => (
                   <div
                     key={scen.id}
                     className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2.5"
@@ -542,25 +538,6 @@ export default function ImpactRegressionSection({
                           {scen.expectedCobol}
                         </span>
                       </div>
-                    </div>
-
-                    {/* Java 21 JUnit Assertion Code Snippet */}
-                    <div className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[11px] flex items-center justify-between gap-3 border border-slate-800">
-                      <span className="truncate text-emerald-400">
-                        {scen.targetJavaAssertion}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyCode(scen.id, scen.targetJavaAssertion)}
-                        className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors shrink-0 cursor-pointer"
-                        title="Copy JUnit assertion"
-                      >
-                        {copiedId === scen.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
                     </div>
 
                     <div className="text-[10px] text-slate-400 font-mono">

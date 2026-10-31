@@ -37,6 +37,7 @@ export function ProjectProvider({ children }) {
   const [plan, setPlan] = useState(null);
   const [report, setReport] = useState(null);
   const [impactMap, setImpactMap] = useState({});
+  const [functions, setFunctions] = useState([]);
 
   // Evidence state
   const [isReassessed, setIsReassessed] = useState(false);
@@ -61,19 +62,27 @@ export function ProjectProvider({ children }) {
     if (!pid) return;
 
     try {
-      const [ov, fnd, dep, rep, pln] = await Promise.all([
+      const [ov, fnd, dep, rep, pln, fns] = await Promise.all([
         projectService.getOverview(pid).catch(() => null),
         analysisService.getFindings(pid).catch(() => []),
         analysisService.getDependencies(pid).catch(() => ({})),
         reportService.getReport(pid).catch(() => null),
-        reportService.generatePlan(pid).catch(() => null)
+        reportService.generatePlan(pid).catch(() => null),
+        analysisService.getFunctions(pid).catch(() => [])
       ]);
 
       if (ov) setOverview(ov);
-      if (fnd && fnd.length > 0) setFindings(fnd);
+      if (fnd) setFindings(fnd);
       if (dep) setDependencies(dep);
       if (rep) setReport(rep);
       if (pln) setPlan(pln);
+      if (fns) setFunctions(fns);
+
+      // Impact (blast radius and regression suggestions) for every finding. No AI calls.
+      const impacts = await Promise.all((fnd || []).map((f) =>
+        analysisService.getImpact(pid, f.id).then((r) => [f.id, r]).catch(() => null)
+      ));
+      setImpactMap(Object.fromEntries(impacts.filter(Boolean)));
     } catch (err) {
       console.warn('Error refreshing project analysis data from backend:', err);
     }
@@ -280,6 +289,7 @@ export function ProjectProvider({ children }) {
     plan,
     report,
     impactMap,
+    functions,
 
     // Evidence & Reassessment
     isReassessed,

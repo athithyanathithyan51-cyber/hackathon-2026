@@ -205,6 +205,8 @@ def list_findings(project_id: str):
             "start_line": version.finding.start_line,
             "version": version.version,
             "description": version.finding.business_rule_description,
+            "condition": version.finding.observed_condition,
+            "observed_behavior": version.finding.observed_behavior,
             "evidence_status": version.finding.evidence_status.value,
             "risk_score": risk.risk_score if risk else None,
             "risk_category": risk.risk_category.value if risk else None,

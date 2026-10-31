@@ -4,6 +4,7 @@ import Badge from '../common/Badge';
 import Button from '../common/Button';
 import { useProject } from '../../context/ProjectContext';
 import { REGRESSION_TEST_SCENARIOS } from '../../data/mockCobolData';
+import { toRegressionScenarios } from '../../data/liveAdapters';
 
 export default function ModernizationReportSection({ onNavigate }) {
   const {
@@ -23,6 +24,10 @@ export default function ModernizationReportSection({ onNavigate }) {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // Live regression suggestions; the mock scenarios are used only when no project is loaded
+  const liveScenarios = toRegressionScenarios(impactMap, findings);
+  const regressionScenarios = liveScenarios.length > 0 ? liveScenarios : REGRESSION_TEST_SCENARIOS;
 
   // Derive component strategy recommendations from live findings or fallback
   const componentStrategies = useMemo(() => {
@@ -363,7 +368,7 @@ export default function ModernizationReportSection({ onNavigate }) {
             ))}
 
             {/* Standard Grounded Regression Scenarios */}
-            {REGRESSION_TEST_SCENARIOS.map((scen) => (
+            {regressionScenarios.map((scen) => (
               <div
                 key={scen.id}
                 className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs"

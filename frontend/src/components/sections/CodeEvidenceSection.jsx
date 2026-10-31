@@ -16,6 +16,8 @@ import {
   DISCOVERED_FUNCTIONS, 
   BUSINESS_RULE_CANDIDATES
 } from '../../data/mockBankingData';
+import { useProject } from '../../context/ProjectContext';
+import { toFunctions, toRuleCandidates } from '../../data/liveAdapters';
 
 export default function CodeEvidenceSection({
   files = [],
@@ -34,6 +36,14 @@ export default function CodeEvidenceSection({
   const [activeTab, setActiveTab] = useState('rules'); // 'rules' | 'explorer' | 'code'
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0] || null;
+
+  // Live data from the backend. The mock data is used only when no project is loaded.
+  const { findings, functions, stagedFiles } = useProject();
+  const sourceByFile = Object.fromEntries((stagedFiles || []).map(f => [f.name, f.content]));
+  const liveFunctions = functions && functions.length > 0 ? toFunctions(functions, findings, sourceByFile) : null;
+  const liveRuleCandidates = findings && findings.length > 0 ? toRuleCandidates(findings) : null;
+  const fnList = liveFunctions || DISCOVERED_FUNCTIONS;
+  const ruleCandidates = liveRuleCandidates || BUSINESS_RULE_CANDIDATES;
 
   const handleFilesSelected = (newFiles) => {
     setFiles(prev => [...prev, ...newFiles]);
@@ -84,7 +94,7 @@ export default function CodeEvidenceSection({
       setIsAnalyzing(false);
       setIsAnalyzed(true);
       if (!selectedFunctionId) {
-        setSelectedFunctionId(DISCOVERED_FUNCTIONS[0].id);
+        setSelectedFunctionId(fnList[0].id);
       }
     }, 1400);
   };
@@ -257,7 +267,7 @@ export default function CodeEvidenceSection({
           {/* Business Rules View */}
           {activeTab === 'rules' && (
             <BusinessRuleTable
-              rules={BUSINESS_RULE_CANDIDATES}
+              rules={ruleCandidates}
               onSelectRuleFunction={handleSelectRuleFunction}
               isReassessed={isReassessed}
             />
@@ -266,8 +276,8 @@ export default function CodeEvidenceSection({
           {/* Function Explorer View */}
           {activeTab === 'explorer' && (
             <FunctionExplorer
-              functions={DISCOVERED_FUNCTIONS}
-              selectedFunctionId={selectedFunctionId || DISCOVERED_FUNCTIONS[0].id}
+              functions={fnList}
+              selectedFunctionId={selectedFunctionId || fnList[0].id}
               onSelectFunction={setSelectedFunctionId}
             />
           )}
