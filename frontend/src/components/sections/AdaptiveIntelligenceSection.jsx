@@ -69,7 +69,7 @@ export default function AdaptiveIntelligenceSection({
   const handleTriggerReassessment = () => {
     setIsReassessing(true);
     setReassessProgress(15);
-    setReassessStep('1/4 Analyzing semantic divergence between INC-101 and calculate_penalty()...');
+    setReassessStep('1/4 Analyzing semantic divergence between INC-101 and 2100-CALCULATE-PENALTY...');
 
     setTimeout(() => {
       setReassessProgress(45);
@@ -131,7 +131,7 @@ export default function AdaptiveIntelligenceSection({
               size="sm"
               icon={ArrowRight}
               iconPosition="right"
-              onClick={() => onNavigate('code-evidence')}
+              onClick={() => onNavigate('business-rules')}
             >
               View Updated Rules
             </Button>

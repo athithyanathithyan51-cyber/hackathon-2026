@@ -28,7 +28,7 @@ export default function AnalysisHistorySection({
       riskVariant: 'amber',
       status: 'Archived Baseline',
       statusVariant: 'neutral',
-      summary: 'Deterministic code analysis of penalty_engine.py. Extracted minimum-balance fee of ₹50.'
+      summary: 'Deterministic COBOL AST analysis of PENALTY.cbl & ACCTREC.cpy. Extracted minimum-balance fee of ₹50 from paragraph 2100.'
     },
     ...(isReassessed ? [{
       id: 'v2.0',
