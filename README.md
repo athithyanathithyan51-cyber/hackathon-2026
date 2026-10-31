@@ -26,71 +26,48 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 **Critical rule:** code that looks obsolete must not be marked removable if it implements an undocumented but critical business rule. Old technology alone is never a reason to delete or rewrite.
 
-## API Contract (v2)
+## API Contract (v3)
 
-Base path `/api`. All bodies and responses are JSON. Status codes: `200` success, `404` unknown id, `422` invalid body or unparseable Python.
+Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown project or finding, `422` invalid body or Python that does not parse.
 
-**Status:** `Done` = implemented and tested on `main`. `Planned` = agreed, not built yet. Build planned endpoints against this contract; change it only through a PR.
+**Status:** all endpoints below are implemented and tested on this branch. Not built yet: the `functions` listing and the `report` endpoint (planned for the COBOL and Java step).
 
-**Rules that apply to every endpoint**
+**Rules for every endpoint**
 - Uploaded code is parsed, never executed.
-- Every finding carries a real `file` and `line`.
-- Results are stored, and previous findings are kept when evidence changes.
-
-### Projects and code intelligence (Done)
+- Every finding carries a real `file` and `start_line`.
+- Each finding is versioned. Adding evidence creates a new version; earlier versions are kept.
+- Each project has its own history database, so projects never share findings.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/health` | - | `{ "status": "ok" }` |
-| POST | `/api/projects` | `{ "name": str, "files": [{ "path": str, "content": str }] }` | `{ "id", "name", "status": "done", "rule_count" }` |
+| POST | `/api/projects` | `{ "name", "files": [{ "path", "content" }] }` | `{ "id", "name", "status": "done", "file_count", "function_count", "rule_count" }` |
 | GET | `/api/projects/{id}` | - | `{ "id", "name", "file_count", "rule_count" }` |
-| GET | `/api/projects/{id}/rules` | - | `[{ "function", "file", "line", "condition", "returns_if_true", "returns_otherwise" }]` |
-| GET | `/api/projects/{id}/dependencies` | - | `{ "<file>:<function>": ["<called function>", ...] }` |
+| GET | `/api/projects/{id}/dependencies` | - | `{ "<file>:<function>": ["<called function>"] }` |
+| POST | `/api/projects/{id}/evidence` | `{ "name", "content" }` | `{ "evidence", "linked_findings": [{ "finding_id", "match": "SUPPORTED\|CONFLICTED", "new_version" }] }` |
+| GET | `/api/projects/{id}/findings` | - | `[{ "id", "function", "file", "start_line", "version", "description", "evidence_status", "risk_score", "risk_category", "recommendation", "evidence": [{ "source", "match", "explanation" }] }]` |
+| GET | `/api/projects/{id}/findings/{fid}/history` | - | `[{ "version", "timestamp", "change_reason", "evidence_status", "risk_score", "risk_category" }]` |
+| POST | `/api/projects/{id}/impact` | `{ "finding_id" }` | `{ "finding_id", "risk_score", "risk_category", "risk_reasons": [str], "affected": ["<file>:<function>"], "regression_tests": [{ "input", "expected", "note" }], "recommendation" }` |
+| GET | `/api/projects/{id}/overview` | - | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
-- Only `.py` files are analyzed. Other files are stored as evidence.
-- A syntax error returns `422` with `detail` = `"<file> line <n>: <message>"`.
-- `returns_if_true` and `returns_otherwise` are the constant values the branches return, or `null` when they are not simple constants.
-
-### Evidence and adaptive findings (Planned)
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| POST | `/api/projects/{id}/evidence` | `{ "type": "doc\|sql\|incident\|change_request", "name": str, "content": str }` | `{ "id", "linked_findings": [{ "finding_id", "match": "strong\|weak" }] }` |
-| GET | `/api/projects/{id}/findings` | - | `[{ "id", "rule", "evidence_status", "risk", "recommendation", "evidence": [{ "id", "type", "name", "stance": "supports\|conflicts" }] }]` |
-| GET | `/api/projects/{id}/findings/{finding_id}/history` | - | `[{ "version", "created_at", "evidence_status", "risk", "recommendation", "trigger_evidence_id" }]` |
-
-- `evidence_status` is one of `validated`, `incomplete` (needs validation), or `conflicting`.
-- Adding evidence never deletes a finding. It updates the finding and adds a history version.
-- An incident is evidence, not an approved policy, so it can at most move a finding to `incomplete`.
-
-### Impact analysis (Planned)
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| POST | `/api/projects/{id}/impact` | `{ "function": "<file>:<function>" }` | `{ "risk_score", "risk_reasons": [str], "affected": [str], "regression_tests": [{ "input", "expected", "note" }], "recommendation": "retain\|refactor\|replace\|investigate" }` |
-
-- `regression_tests` are suggestions, not verified results.
-- `recommendation` is always a suggestion for human review. Nothing is changed automatically.
-- Components with no found references are not assumed unused.
-
-### Overview (Planned)
-
-| Method | Path | Response |
-|---|---|---|
-| GET | `/api/projects/{id}/overview` | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
+**Enums**
+- `evidence_status`: `OBSERVED_IN_CODE`, `SUPPORTED_BY_EVIDENCE`, `CONFLICTED_BY_EVIDENCE`, `UNCERTAIN_EVIDENCE`
+- `risk_category`: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
+- `recommendation`: `retain`, `refactor`, `replace`, `investigate`. `investigate` when risk is CRITICAL or evidence conflicts. `refactor` when risk is HIGH. Otherwise `retain`. Always a suggestion for human review.
 
 ## Setup
 
+Run everything from the repository root.
+
 ```bash
-cd backend
-pip install -r requirements.txt
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 ```
 
 ## Run
 
 ```bash
-cd backend
-uvicorn main:app --reload
+uvicorn backend.main:app --reload
+python -m pytest
 ```
 
 Health check: http://127.0.0.1:8000/api/health

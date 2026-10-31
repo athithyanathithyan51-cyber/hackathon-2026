@@ -1,43 +1,103 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
-from main import app
+from backend.main import app
 
-PENALTY = """def calculate_penalty(balance):
-    if balance < 1000:
-        return 50
-    return 0
-"""
+SAMPLES = Path(__file__).resolve().parent.parent / "legacyiq_engine" / "samples"
+BANKING = (SAMPLES / "banking_legacy.py").read_text(encoding="utf8")
+INCIDENT = (SAMPLES / "incident_101.txt").read_text(encoding="utf8")
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("LEGACYIQ_DB", str(tmp_path / "test.db"))
+    monkeypatch.setenv("LEGACYIQ_DATA_DIR", str(tmp_path))
     return TestClient(app)
 
 
-def _create(client, files):
-    return client.post("/api/projects", json={"name": "banking", "files": files})
+def _create(client, files, name="banking"):
+    return client.post("/api/projects", json={"name": name, "files": files})
+
+
+def _banking_project(client):
+    response = _create(client, [{"path": "banking_legacy.py", "content": BANKING}])
+    assert response.status_code == 200
+    return response.json()["id"]
 
 
 def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
-def test_upload_returns_rules_with_file_and_line(client):
-    response = _create(client, [{"path": "billing.py", "content": PENALTY}])
-    assert response.status_code == 200
-    body = response.json()
-    assert body["rule_count"] == 1
-    rules = client.get(f"/api/projects/{body['id']}/rules").json()
-    assert rules[0]["file"] == "billing.py"
-    assert rules[0]["line"] == 2
+def test_upload_creates_rule_candidate_with_baseline_version(client):
+    project_id = _banking_project(client)
+    findings = client.get(f"/api/projects/{project_id}/findings").json()
+    assert len(findings) == 1
+    assert findings[0]["function"] == "calculate_penalty"
+    assert findings[0]["start_line"] == 2
+    assert findings[0]["version"] == 1
+    assert findings[0]["evidence_status"] == "OBSERVED_IN_CODE"
+
+
+def test_incident_reassesses_finding_and_keeps_history(client):
+    project_id = _banking_project(client)
+    finding_id = client.get(f"/api/projects/{project_id}/findings").json()[0]["id"]
+
+    evidence = client.post(
+        f"/api/projects/{project_id}/evidence",
+        json={"name": "INC-101", "content": INCIDENT},
+    )
+    assert evidence.status_code == 200
+    linked = evidence.json()["linked_findings"]
+    assert linked[0]["finding_id"] == finding_id
+    assert linked[0]["match"] == "CONFLICTED"
+    assert linked[0]["new_version"] == 2
+
+    updated = client.get(f"/api/projects/{project_id}/findings").json()[0]
+    assert updated["evidence_status"] == "CONFLICTED_BY_EVIDENCE"
+    assert updated["risk_category"] == "CRITICAL"
+    assert updated["recommendation"] == "investigate"
+
+    history = client.get(f"/api/projects/{project_id}/findings/{finding_id}/history").json()
+    assert [v["version"] for v in history] == [1, 2]
+
+
+def test_impact_returns_suggestions_and_regression_tests(client):
+    project_id = _banking_project(client)
+    finding_id = client.get(f"/api/projects/{project_id}/findings").json()[0]["id"]
+    client.post(f"/api/projects/{project_id}/evidence", json={"name": "INC-101", "content": INCIDENT})
+
+    impact = client.post(f"/api/projects/{project_id}/impact", json={"finding_id": finding_id})
+    assert impact.status_code == 200
+    body = impact.json()
+    assert body["recommendation"] == "investigate"
+    assert body["regression_tests"]
+    assert isinstance(body["regression_tests"][0]["note"], str)
+
+
+def test_overview_counts_conflicts(client):
+    project_id = _banking_project(client)
+    client.post(f"/api/projects/{project_id}/evidence", json={"name": "INC-101", "content": INCIDENT})
+    overview = client.get(f"/api/projects/{project_id}/overview").json()
+    assert overview["rule_candidates"] == 1
+    assert overview["evidence_conflicts"] == 1
+
+
+def test_projects_do_not_share_history(client):
+    first = _banking_project(client)
+    second = _banking_project(client)
+    client.post(f"/api/projects/{first}/evidence", json={"name": "INC-101", "content": INCIDENT})
+
+    finding_id = client.get(f"/api/projects/{second}/findings").json()[0]["id"]
+    history = client.get(f"/api/projects/{second}/findings/{finding_id}/history").json()
+    assert [v["version"] for v in history] == [1]
 
 
 def test_syntax_error_returns_422_with_location(client):
     response = _create(client, [{"path": "bad.py", "content": "def broken(:\n"}])
     assert response.status_code == 422
-    assert "bad.py line 1" in response.json()["detail"]
+    assert "line 1" in response.json()["detail"]
 
 
 def test_non_python_files_are_stored_but_not_analyzed(client):
@@ -48,3 +108,4 @@ def test_non_python_files_are_stored_but_not_analyzed(client):
 
 def test_unknown_project_returns_404(client):
     assert client.get("/api/projects/does-not-exist").status_code == 404
+    assert client.get("/api/projects/does-not-exist/overview").status_code == 404
