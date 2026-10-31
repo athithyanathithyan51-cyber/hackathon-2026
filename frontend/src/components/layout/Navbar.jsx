@@ -2,6 +2,7 @@ import { Menu } from 'lucide-react';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 import { NAV_SECTIONS } from '../../constants/navigation';
+import { useProject } from '../../context/ProjectContext';
 
 export default function Navbar({
   activeSection,
@@ -9,6 +10,7 @@ export default function Navbar({
   onResetDemo
 }) {
   const currentNav = NAV_SECTIONS.find(item => item.id === activeSection) || NAV_SECTIONS[0];
+  const { activeFile, isBackendOnline } = useProject();
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
@@ -46,10 +48,12 @@ export default function Navbar({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Modernization Status Pill */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="font-medium text-slate-700">COBOL → Java 21</span>
+          <span className={`w-2 h-2 rounded-full ${isBackendOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+          <span className="font-medium text-slate-700">
+            {isBackendOnline ? 'Live Engine' : 'Offline Mode'}
+          </span>
           <span className="text-slate-300">|</span>
-          <span className="text-slate-500 font-mono">PENALTY.cbl</span>
+          <span className="text-slate-500 font-mono">{activeFile?.name || 'PENALTY.cbl'}</span>
         </div>
 
         {/* Demo reset / reload button */}

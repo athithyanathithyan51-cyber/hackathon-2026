@@ -1,39 +1,75 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
-import { COBOL_BUSINESS_RULES } from '../../data/mockCobolData';
+import { useProject } from '../../context/ProjectContext';
 
-export default function BusinessLogicSection({
-  onNavigate,
-  isReassessed = false,
-  setIsReassessed
-}) {
-  const [selectedRuleId, setSelectedRuleId] = useState('BR-001');
+export default function BusinessLogicSection({ onNavigate }) {
+  const {
+    findings,
+    plan,
+    isReassessed,
+    submitEvidence,
+    referenceRules,
+    isBackendOnline,
+    activeFile
+  } = useProject();
 
-  const rules = COBOL_BUSINESS_RULES.map(rule => {
-    if (rule.id === 'BR-001' && isReassessed) {
-      return {
-        ...rule,
-        verificationStatus: 'CONFLICTING',
-        confidenceScore: 0.64,
-        confidence: '64% (Contradicted by INC-101)',
-        risk: 'High (Disputed Exemption Logic)',
-        riskVariant: 'danger',
-        evidenceReferences: ['PENALTY.cbl: Lines 37–44', 'ACCTREC.cpy (WS-PAYMENT-EXT-FLAG)', 'INC-101 (Dispute Stream)']
-      };
+  const [selectedRuleId, setSelectedRuleId] = useState(null);
+  const [evidenceInput, setEvidenceInput] = useState(
+    'Customers with an approved payment extension should be exempt from the minimum balance penalty. The application appears to charge these customers unconditionally.'
+  );
+  const [isSubmittingEvidence, setIsSubmittingEvidence] = useState(false);
+
+  // Map backend findings or reference rules
+  const rules = useMemo(() => {
+    if (findings && findings.length > 0) {
+      return findings.map((f, idx) => {
+        const planFinding = plan?.findings?.find(pf => pf.id === f.id);
+        const isDisputed = f.evidence_status === 'CONFLICTED_BY_EVIDENCE';
+        
+        return {
+          id: f.id,
+          displayId: `BR-00${idx + 1}`,
+          title: f.description?.split(':')[0] || `Rule in ${f.function}`,
+          program: f.file || activeFile?.name || 'PENALTY.cbl',
+          paragraph: f.function,
+          lines: `Line ${f.start_line}`,
+          startLine: f.start_line,
+          observedCondition: planFinding?.condition || f.description,
+          expectedBehavior: f.recommendation ? `Action: ${f.recommendation}` : 'Standard path',
+          interpretation: planFinding?.interpretation?.business_explanation || f.description,
+          questions: planFinding?.interpretation?.questions || [],
+          modelUsed: planFinding?.interpretation?.model || 'deterministic-ast',
+          isFallback: planFinding?.interpretation?.is_fallback ?? true,
+          verificationStatus: isDisputed ? 'CONFLICTED_BY_EVIDENCE' : f.evidence_status,
+          risk: `${f.risk_category || 'MEDIUM'} (${f.risk_score || 50}/100)`,
+          riskVariant: f.risk_category === 'CRITICAL' ? 'danger' : f.risk_category === 'HIGH' ? 'danger' : f.risk_category === 'LOW' ? 'success' : 'warning',
+          evidence: f.evidence || [],
+          isLiveBackend: true
+        };
+      });
     }
-    return {
-      ...rule,
-      riskVariant: rule.risk.includes('High') ? 'danger' : rule.risk.includes('Medium') ? 'warning' : 'neutral'
-    };
-  });
 
-  const selectedRule = rules.find(r => r.id === selectedRuleId) || rules[0];
+    // Reference model fallback when backend findings are empty
+    return referenceRules.map(r => ({
+      ...r,
+      displayId: r.id,
+      riskVariant: r.risk.includes('High') ? 'danger' : r.risk.includes('Medium') ? 'warning' : 'neutral',
+      isLiveBackend: false
+    }));
+  }, [findings, plan, referenceRules, activeFile]);
 
-  const handleToggleReassessment = () => {
-    if (setIsReassessed) {
-      setIsReassessed(!isReassessed);
+  // Select first rule by default
+  const activeSelectedId = selectedRuleId || rules[0]?.id;
+  const selectedRule = rules.find(r => r.id === activeSelectedId) || rules[0];
+
+  const handleSimulateEvidence = async () => {
+    setIsSubmittingEvidence(true);
+    try {
+      await submitEvidence('INC-101', evidenceInput);
+    } finally {
+      setIsSubmittingEvidence(false);
     }
   };
 
@@ -46,26 +82,22 @@ export default function BusinessLogicSection({
             <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
               Extracted Business Logic
             </span>
-            <Badge variant={isReassessed ? 'warning' : 'success'} size="xs" dot>
-              {isReassessed ? 'Adaptive State (v2.0)' : 'Baseline Grounded (v1.0)'}
+            <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs" dot>
+              {isBackendOnline ? 'Live Engine Findings' : 'Offline Reference Model'}
+            </Badge>
+            <Badge variant={isReassessed ? 'warning' : 'neutral'} size="xs">
+              {isReassessed ? 'Evidence Reassessment Active' : 'Baseline Extraction'}
             </Badge>
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
             Business Rules & Evidence Provenance
           </h2>
           <p className="text-xs text-slate-600 max-w-2xl mt-0.5">
-            Traceable business logic extracted directly from COBOL PROCEDURE DIVISION paragraphs. Every condition is line-grounded in source code and corroborated against operational incident records.
+            Traceable business rules extracted from COBOL PROCEDURE DIVISION statements. Code facts are derived deterministically from the AST; interpretations and incident claims are clearly demarcated.
           </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleToggleReassessment}
-          >
-            {isReassessed ? 'Reset to Baseline (v1.0)' : 'Simulate INC-101 Evidence'}
-          </Button>
           <Button
             variant="primary"
             size="sm"
@@ -76,39 +108,48 @@ export default function BusinessLogicSection({
         </div>
       </div>
 
-      {/* Compact Evidence Conflict Banner (INC-101) */}
+      {/* Incident Evidence Ingestion / Simulation Panel */}
       <div className={`p-4 rounded-xl border text-xs transition-colors ${
         isReassessed 
-          ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+          ? 'bg-amber-50 border-amber-200 text-amber-950'
           : 'bg-slate-50 border-slate-200 text-slate-700'
       }`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-xs uppercase font-mono tracking-wider">
-                {isReassessed ? 'Evidence Conflict Detected: Incident INC-101' : 'Operational Evidence Status'}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="font-bold text-xs uppercase font-mono tracking-wider block">
+                {isReassessed ? 'Active Dispute: Incident INC-101 Correlated' : 'Operational Evidence Ingestion (INC-101)'}
               </span>
-              <Badge variant={isReassessed ? 'danger' : 'neutral'} size="xs">
-                {isReassessed ? 'Disputed Rule BR-001' : 'No Active Disputes'}
-              </Badge>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {isReassessed 
+                  ? 'The backend evidence matcher linked INC-101 to the penalty calculation routine, detecting a missing exemption check and elevating risk.'
+                  : 'Ingest production tickets or dispute streams to test adaptive evidence reconciliation with source code.'
+                }
+              </p>
             </div>
-            <p className="text-xs leading-relaxed text-slate-600">
-              {isReassessed
-                ? 'Incident INC-101 reports customers with approved payment extensions are improperly penalized. COBOL paragraph 2100-CALCULATE-PENALTY executes an unconditional deduction, omitting copybook flag WS-PAYMENT-EXT-FLAG.'
-                : 'Rule BR-001 is currently supported by static AST extraction. Click "Simulate INC-101 Evidence" to demonstrate adaptive evidence reconciliation.'}
-            </p>
+            <Badge variant={isReassessed ? 'danger' : 'neutral'} size="xs">
+              {isReassessed ? 'Status: CONFLICTED_BY_EVIDENCE' : 'Awaiting New Evidence'}
+            </Badge>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {isReassessed && (
-              <Button
-                variant="subtle"
-                size="xs"
-                onClick={() => setSelectedRuleId('BR-001')}
-              >
-                Inspect Conflict
-              </Button>
-            )}
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <input
+              type="text"
+              value={evidenceInput}
+              onChange={(e) => setEvidenceInput(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Enter incident or policy evidence..."
+              disabled={isSubmittingEvidence}
+            />
+            <Button
+              variant={isReassessed ? 'secondary' : 'primary'}
+              size="sm"
+              onClick={handleSimulateEvidence}
+              disabled={isSubmittingEvidence}
+              className="shrink-0"
+            >
+              {isSubmittingEvidence ? 'Reassessing...' : isReassessed ? 'Re-run Reassessment' : 'Submit Incident INC-101'}
+            </Button>
           </div>
         </div>
       </div>
@@ -116,27 +157,30 @@ export default function BusinessLogicSection({
       {/* Compact Business Rules Table */}
       <Card
         title="Business Rules Inventory"
-        subtitle="Scope: PENALTY.cbl (PROGRAM-ID: PENALTY-CALCULATOR)"
-        badge={<Badge variant="neutral" size="xs">{rules.length} Extracted</Badge>}
+        subtitle={`Scope: ${activeFile?.name || 'PENALTY.cbl'} • Source AST Grounded`}
+        badge={
+          <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs">
+            {rules.length} {isBackendOnline ? 'Engine Rules' : 'Reference Rules'}
+          </Badge>
+        }
       >
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Rule ID</th>
-                <th className="py-2.5 px-3">Business Rule</th>
-                <th className="py-2.5 px-3">COBOL Paragraph</th>
+                <th className="py-2.5 px-3">Paragraph / Function</th>
                 <th className="py-2.5 px-3">Lines</th>
-                <th className="py-2.5 px-3">Observed Condition</th>
-                <th className="py-2.5 px-3">Observed Action</th>
+                <th className="py-2.5 px-3">Condition (Code Fact)</th>
                 <th className="py-2.5 px-3">Evidence Status</th>
-                <th className="py-2.5 px-3">Risk</th>
+                <th className="py-2.5 px-3">Risk Category</th>
+                <th className="py-2.5 px-3">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {rules.map((rule) => {
-                const isSelected = rule.id === selectedRuleId;
-                const isDisputed = rule.id === 'BR-001' && isReassessed;
+                const isSelected = rule.id === activeSelectedId;
+                const isDisputed = rule.verificationStatus === 'CONFLICTED_BY_EVIDENCE' || (rule.paragraph.includes('2100') && isReassessed);
 
                 return (
                   <tr
@@ -148,33 +192,30 @@ export default function BusinessLogicSection({
                         : 'hover:bg-slate-50'
                     }`}
                   >
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                      {rule.id}
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                      {rule.displayId || rule.id.slice(0, 10)}
                     </td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-800">
-                      {rule.title}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-blue-700">
+                    <td className="py-2.5 px-3 font-mono text-blue-700 font-semibold">
                       {rule.paragraph}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">
                       {rule.lines}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 max-w-[200px] truncate">
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 max-w-[240px] truncate">
                       {rule.observedCondition}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 max-w-[180px] truncate">
-                      {rule.expectedBehavior}
                     </td>
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <Badge variant={isDisputed ? 'danger' : 'success'} size="xs">
-                        {isDisputed ? 'CONFLICTING' : 'SUPPORTED'}
+                        {isDisputed ? 'CONFLICTED' : rule.verificationStatus || 'OBSERVED_IN_CODE'}
                       </Badge>
                     </td>
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <Badge variant={rule.riskVariant || 'neutral'} size="xs">
-                        {rule.risk.split(' ')[0]}
+                        {rule.risk ? rule.risk.split(' ')[0] : 'MEDIUM'}
                       </Badge>
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-xs text-slate-600 capitalize">
+                      {rule.expectedBehavior?.replace('Action: ', '') || 'Refactor'}
                     </td>
                   </tr>
                 );
@@ -185,89 +226,123 @@ export default function BusinessLogicSection({
       </Card>
 
       {/* Selected Rule Inspection & Grounding */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Rule Detail & Traceability */}
-        <div className="lg:col-span-7 space-y-4">
-          <Card
-            title={`${selectedRule.id}: ${selectedRule.title}`}
-            subtitle={`Grounded in ${selectedRule.program} (${selectedRule.paragraph}, ${selectedRule.lines})`}
-            badge={
-              <Badge variant={selectedRule.id === 'BR-001' && isReassessed ? 'danger' : 'success'} size="xs">
-                {selectedRule.id === 'BR-001' && isReassessed ? 'Conflicting Evidence' : 'Verified Logic'}
-              </Badge>
-            }
-          >
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                <span className="font-semibold text-slate-900 block">Plain English Interpretation:</span>
-                <p className="text-slate-600 leading-relaxed">
-                  {selectedRule.interpretation}
-                </p>
-              </div>
-
-              {/* Exact Source Code Snippet */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-slate-500 font-mono text-[11px]">
-                  <span>Source Grounding ({selectedRule.lines})</span>
-                  <span>{selectedRule.paragraph}</span>
+      {selectedRule && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left: Rule Detail & Traceability */}
+          <div className="lg:col-span-7 space-y-4">
+            <Card
+              title={`${selectedRule.displayId || selectedRule.id.slice(0, 10)}: ${selectedRule.paragraph}`}
+              subtitle={`Source Grounding: ${selectedRule.program} (${selectedRule.lines})`}
+              badge={
+                <Badge 
+                  variant={selectedRule.verificationStatus === 'CONFLICTED_BY_EVIDENCE' || (selectedRule.paragraph.includes('2100') && isReassessed) ? 'danger' : 'success'} 
+                  size="xs"
+                >
+                  {selectedRule.verificationStatus === 'CONFLICTED_BY_EVIDENCE' || (selectedRule.paragraph.includes('2100') && isReassessed) ? 'Conflicted by Evidence' : 'Observed Code Fact'}
+                </Badge>
+              }
+            >
+              <div className="space-y-3.5 text-xs">
+                {/* Code Fact (AST) */}
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="font-semibold text-slate-900 block text-[11px] uppercase tracking-wider font-mono">
+                    Deterministic Code Fact (AST)
+                  </span>
+                  <p className="text-slate-800 font-mono text-[11px] leading-relaxed">
+                    {selectedRule.observedCondition}
+                  </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed border border-slate-800">
-                  <div className="text-slate-400">{`* Grounded Rule ${selectedRule.id}`}</div>
-                  <div className="text-amber-300">{selectedRule.observedCondition}</div>
-                  <div className="text-emerald-300 pl-4">{selectedRule.expectedBehavior}</div>
-                  <div className="text-slate-400">END-IF.</div>
-                </div>
-              </div>
 
-              {/* Provenance and Citations */}
-              <div className="space-y-1">
-                <span className="font-semibold text-slate-900 block">Evidence Provenance:</span>
-                <div className="space-y-1 font-mono text-[11px]">
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200 flex items-center justify-between">
-                    <span>1. Static COBOL AST Extraction</span>
-                    <span className="text-slate-500">{selectedRule.lines}</span>
+                {/* AI / Heuristic Interpretation */}
+                <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-200 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-blue-700 font-mono">
+                    <span className="font-semibold uppercase tracking-wider">Business Interpretation</span>
+                    <span>Model: {selectedRule.modelUsed || 'deterministic-fallback'}</span>
                   </div>
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200 flex items-center justify-between">
-                    <span>2. Shared Copybook Definition</span>
-                    <span className="text-slate-500">ACCTREC.cpy (WS-PAYMENT-EXT-FLAG)</span>
-                  </div>
-                  {selectedRule.id === 'BR-001' && isReassessed && (
-                    <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between font-semibold">
-                      <span>3. Production Dispute Ingestion</span>
-                      <span>INC-101 (Payment Extension Waiver)</span>
-                    </div>
-                  )}
+                  <p className="text-slate-700 leading-relaxed text-[11px]">
+                    {selectedRule.interpretation}
+                  </p>
                 </div>
-              </div>
-            </div>
-          </Card>
-        </div>
 
-        {/* Right: Target Java 21 Spring Boot Entity */}
-        <div className="lg:col-span-5 space-y-4">
-          <Card
-            title="Target Java 21 Clean Architecture"
-            subtitle="Synthesized Spring Boot 3.3.x Domain Component"
-            badge={<Badge variant="info" size="xs">Java 21 LTS</Badge>}
-          >
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Target Component</span>
-                <span className="font-mono font-bold text-blue-700 text-xs">
-                  {selectedRule.targetJavaEntity}
-                </span>
-              </div>
+                {/* Questions for Human Validation if provided by engine */}
+                {selectedRule.questions && selectedRule.questions.length > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                    <span className="font-semibold text-slate-800 block text-[11px]">
+                      Questions for Human Business Owner Validation:
+                    </span>
+                    <ul className="space-y-1 text-slate-600 list-disc list-inside text-[11px]">
+                      {selectedRule.questions.map((q, i) => (
+                        <li key={i}>{q}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-              <div className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[11px] leading-relaxed border border-slate-800 overflow-x-auto">
-                <pre>
-{selectedRule.id === 'BR-001' ? `// Target Service: PenaltyCalculationService.java
+                {/* Exact Source Code Snippet */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 font-mono text-[11px]">
+                    <span>Source Grounding ({selectedRule.lines})</span>
+                    <span>{selectedRule.paragraph}</span>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed border border-slate-800">
+                    <div className="text-slate-400">{`* ${selectedRule.paragraph} Routine`}</div>
+                    <div className="text-amber-300">{selectedRule.observedCondition}</div>
+                    <div className="text-slate-400">END-IF.</div>
+                  </div>
+                </div>
+
+                {/* Linked Evidence Items from Backend */}
+                {selectedRule.evidence && selectedRule.evidence.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="font-semibold text-slate-900 block text-[11px]">
+                      Correlated Evidence Artifacts:
+                    </span>
+                    {selectedRule.evidence.map((ev, i) => (
+                      <div key={i} className="p-2.5 rounded bg-rose-50 border border-rose-200 text-[11px] space-y-0.5">
+                        <div className="flex items-center justify-between font-bold text-rose-900">
+                          <span>{ev.source}</span>
+                          <Badge variant="danger" size="xs">{ev.match}</Badge>
+                        </div>
+                        <p className="text-rose-800 text-[10px]">{ev.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Right: Modernization Target Specification */}
+          <div className="lg:col-span-5 space-y-4">
+            <Card
+              title="Target Modernization Architecture"
+              subtitle="Java 21 + Spring Boot 3.3.x Domain Service Specification"
+              badge={<Badge variant="info" size="xs">Java 21 LTS</Badge>}
+            >
+              <div className="space-y-3 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Target Domain Component</span>
+                  <span className="font-mono font-bold text-blue-700 text-xs">
+                    PenaltyCalculationService.java (@Service)
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[11px] leading-relaxed border border-slate-800 overflow-x-auto">
+                  <pre>
+{`// Target Architecture: Java 21 LTS + Spring Boot 3.3.x
+package com.bank.penalty.domain.service;
+
+import java.math.BigDecimal;
+import org.springframework.stereotype.Service;
+import com.bank.account.domain.model.AccountRecord;
+
 @Service
 public class PenaltyCalculationService {
     private static final BigDecimal THRESHOLD = new BigDecimal("1000.00");
     private static final BigDecimal PENALTY   = new BigDecimal("50.00");
 
     public BigDecimal calculate(AccountRecord account) {
-        // [EVIDENCE GATE]: Flagged by INC-101
+        // [AUDIT]: Flagged by INC-101
         if (account.paymentExtensionApproved()) {
             return BigDecimal.ZERO;
         }
@@ -276,49 +351,31 @@ public class PenaltyCalculationService {
         }
         return BigDecimal.ZERO;
     }
-}` : selectedRule.id === 'BR-002' ? `// Target Service: PaymentSettlementService.java
-@Service
-@Transactional
-public class PaymentSettlementService {
-    public PaymentResult settle(AccountRecord account, BigDecimal amount) {
-        BigDecimal penalty = penaltyService.calculate(account);
-        BigDecimal newBalance = account.balance()
-                                      .subtract(penalty)
-                                      .subtract(amount);
-        return new PaymentResult(newBalance, penalty);
-    }
-}` : `// Target Model: AccountStatus.java
-public enum AccountStatus {
-    ACTIVE,
-    OVERDRAWN;
-
-    public static AccountStatus evaluate(BigDecimal balance) {
-        return balance.signum() < 0 ? OVERDRAWN : ACTIVE;
-    }
 }`}
-                </pre>
-              </div>
+                  </pre>
+                </div>
 
-              <div className="pt-2 flex items-center justify-between">
-                <Button
-                  variant="secondary"
-                  size="xs"
-                  onClick={() => onNavigate('cobol-analysis')}
-                >
-                  Locate in Source Viewer
-                </Button>
-                <Button
-                  variant="primary"
-                  size="xs"
-                  onClick={() => onNavigate('dependencies-risks')}
-                >
-                  Analyze Dependencies &rarr;
-                </Button>
+                <div className="pt-2 flex items-center justify-between">
+                  <Button
+                    variant="secondary"
+                    size="xs"
+                    onClick={() => onNavigate('cobol-analysis')}
+                  >
+                    Locate in Source Viewer
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="xs"
+                    onClick={() => onNavigate('dependencies-risks')}
+                  >
+                    Analyze Dependencies &rarr;
+                  </Button>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

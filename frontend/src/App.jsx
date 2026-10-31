@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProjectProvider, useProject } from './context/ProjectContext';
 import DashboardLayout from './components/layout/DashboardLayout';
 import OverviewSection from './components/sections/OverviewSection';
 import CobolAnalysisSection from './components/sections/CobolAnalysisSection';
@@ -6,73 +7,42 @@ import BusinessLogicSection from './components/sections/BusinessLogicSection';
 import DependenciesRisksSection from './components/sections/DependenciesRisksSection';
 import ModernizationReportSection from './components/sections/ModernizationReportSection';
 
-export default function App() {
+function AppContent() {
   const [activeSection, setActiveSection] = useState('overview');
-  const [isReassessed, setIsReassessed] = useState(false);
+  const { resetProject } = useProject();
 
   const handleResetDemo = () => {
-    setIsReassessed(false);
+    resetProject();
     setActiveSection('overview');
   };
 
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'overview':
-        return (
-          <OverviewSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-          />
-        );
+        return <OverviewSection onNavigate={setActiveSection} />;
 
       case 'cobol-analysis':
       case 'code-evidence':
-        return (
-          <CobolAnalysisSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-          />
-        );
+        return <CobolAnalysisSection onNavigate={setActiveSection} />;
 
       case 'business-logic':
       case 'business-rules':
       case 'adaptive-intelligence':
-        return (
-          <BusinessLogicSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-            setIsReassessed={setIsReassessed}
-          />
-        );
+        return <BusinessLogicSection onNavigate={setActiveSection} />;
 
       case 'dependencies-risks':
       case 'impact-regression':
       case 'impact-simulator':
       case 'decision-center':
-        return (
-          <DependenciesRisksSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-          />
-        );
+        return <DependenciesRisksSection onNavigate={setActiveSection} />;
 
       case 'modernization-report':
       case 'modernization-roadmap':
       case 'analysis-history':
-        return (
-          <ModernizationReportSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-          />
-        );
+        return <ModernizationReportSection onNavigate={setActiveSection} />;
 
       default:
-        return (
-          <OverviewSection
-            onNavigate={setActiveSection}
-            isReassessed={isReassessed}
-          />
-        );
+        return <OverviewSection onNavigate={setActiveSection} />;
     }
   };
 
@@ -84,5 +54,13 @@ export default function App() {
     >
       {renderActiveSection()}
     </DashboardLayout>
+  );
+}
+
+export default function App() {
+  return (
+    <ProjectProvider>
+      <AppContent />
+    </ProjectProvider>
   );
 }

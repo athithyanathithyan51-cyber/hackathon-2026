@@ -1,4 +1,5 @@
 import { NAV_SECTIONS } from '../../constants/navigation';
+import { useProject } from '../../context/ProjectContext';
 
 export default function Sidebar({
   activeSection,
@@ -6,6 +7,7 @@ export default function Sidebar({
   isMobileOpen,
   onCloseMobile
 }) {
+  const { activeFile, isBackendOnline } = useProject();
   return (
     <>
       {/* Mobile backdrop */}
@@ -43,13 +45,13 @@ export default function Sidebar({
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
             <div className="flex items-center justify-between text-[10px] text-slate-500">
               <span className="uppercase tracking-wider font-semibold">Active Scope</span>
-              <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                COBOL-85
+              <span className={`inline-flex items-center gap-1 font-medium ${isBackendOnline ? 'text-emerald-700' : 'text-slate-500'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isBackendOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                {isBackendOnline ? 'Live Engine' : 'Offline'}
               </span>
             </div>
             <div className="text-slate-900 font-semibold font-mono text-[11px] truncate">
-              PENALTY.cbl
+              {activeFile?.name || 'PENALTY.cbl'}
             </div>
             <div className="text-[10px] text-slate-500 truncate">
               Target: Java 21 + Spring Boot 3.x

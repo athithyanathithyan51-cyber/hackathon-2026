@@ -2,113 +2,130 @@ import { useState, useMemo } from 'react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
-import { 
-  COBOL_DEMO_FILES, 
-  COBOL_PARAGRAPHS, 
-  WORKING_STORAGE_ITEMS,
-  COBOL_BUSINESS_RULES 
-} from '../../data/mockCobolData';
-import { 
-  fetchGitHubCobolFile, 
-  SAMPLE_GITHUB_COBOL_URLS 
-} from '../../services/githubService';
+import { useProject } from '../../context/ProjectContext';
+import { SAMPLE_GITHUB_COBOL_URLS } from '../../services/githubService';
 
-export default function CobolAnalysisSection({
-  onNavigate,
-  isReassessed = false
-}) {
-  // File state (local demo file or fetched GitHub file)
-  const [activeFile, setActiveFile] = useState(COBOL_DEMO_FILES[0]);
-  const [allFiles, setAllFiles] = useState(COBOL_DEMO_FILES);
-  
-  // GitHub URL Fetch state
+export default function CobolAnalysisSection({ onNavigate }) {
+  const {
+    activeFile,
+    setActiveFile,
+    stagedFiles,
+    isAnalyzing,
+    analysisError,
+    analysisSuccess,
+    clearMessages,
+    findings,
+    dependencies,
+    report,
+    isBackendOnline,
+    ingestGitHubFile,
+    analyzeSource,
+    referenceRules,
+    referenceParagraphs,
+    referenceDataItems,
+    isReassessed
+  } = useProject();
+
+  // GitHub URL Input state
   const [githubUrl, setGithubUrl] = useState('');
-  const [isFetching, setIsFetching] = useState(false);
-  const [fetchError, setFetchError] = useState(null);
-  const [fetchSuccess, setFetchSuccess] = useState(null);
 
   // Viewer state
-  const [selectedParagraphId, setSelectedParagraphId] = useState(COBOL_PARAGRAPHS[0].id);
+  const [selectedParagraphId, setSelectedParagraphId] = useState(referenceParagraphs[0]?.id || 'para-2100');
   const [selectedRuleId, setSelectedRuleId] = useState('BR-001');
-  const [highlightedLines, setHighlightedLines] = useState([37, 44]); // Default to Rule BR-001
+  const [highlightedLines, setHighlightedLines] = useState([37, 44]); // Default highlight
   const [searchQuery, setSearchQuery] = useState('');
   const [rightPanelTab, setRightPanelTab] = useState('RULES'); // 'RULES' | 'DATA' | 'STRUCTURE'
 
-  const activeParagraph = COBOL_PARAGRAPHS.find(p => p.id === selectedParagraphId) || COBOL_PARAGRAPHS[0];
+  // Extract paragraphs from backend report or reference
+  const paragraphList = useMemo(() => {
+    if (report?.analysis?.paragraphs && report.analysis.paragraphs.length > 0) {
+      return report.analysis.paragraphs.map((pKey, idx) => {
+        const paraName = pKey.includes(':') ? pKey.split(':')[1] : pKey;
+        const matchingRef = referenceParagraphs.find(p => p.name === paraName);
+        return {
+          id: `para-${idx}`,
+          name: paraName,
+          lineStart: matchingRef?.lineStart || 1,
+          lineEnd: matchingRef?.lineEnd || 10,
+          summary: matchingRef?.summary || `PROCEDURE DIVISION routine ${paraName}`,
+          performedBy: matchingRef?.performedBy || []
+        };
+      });
+    }
+    return referenceParagraphs;
+  }, [report, referenceParagraphs]);
 
-  // Handle GitHub file fetch
+  const activeParagraph = paragraphList.find(p => p.id === selectedParagraphId) || paragraphList[0];
+
+  // Display findings: Use actual backend findings if available; otherwise reference rules
+  const displayRules = useMemo(() => {
+    if (findings && findings.length > 0) {
+      return findings.map((f, idx) => {
+        const isDisputed = f.evidence_status === 'CONFLICTED_BY_EVIDENCE' || (f.function.includes('2100') && isReassessed);
+        return {
+          id: f.id || `BR-00${idx + 1}`,
+          title: f.description || `Rule in ${f.function}`,
+          paragraph: f.function,
+          lines: `Line ${f.start_line}`,
+          startLine: f.start_line,
+          endLine: f.start_line + 4,
+          observedCondition: f.description,
+          status: isDisputed ? 'CONFLICTED_BY_EVIDENCE' : f.evidence_status || 'OBSERVED_IN_CODE',
+          riskScore: f.risk_score,
+          riskCategory: f.risk_category || 'MEDIUM',
+          recommendation: f.recommendation || 'refactor',
+          isLiveBackend: true
+        };
+      });
+    }
+
+    return referenceRules.map(r => {
+      const matchStart = r.lines.match(/\d+/);
+      const matchEnd = r.lines.match(/\d+$/);
+      return {
+        ...r,
+        startLine: matchStart ? parseInt(matchStart[0], 10) : 1,
+        endLine: matchEnd ? parseInt(matchEnd[0], 10) : 10,
+        isLiveBackend: false
+      };
+    });
+  }, [findings, referenceRules, isReassessed]);
+
+  // Handle GitHub Ingestion
   const handleFetchGitHub = async (urlToFetch) => {
     const targetUrl = urlToFetch || githubUrl;
-    if (!targetUrl.trim()) {
-      setFetchError('Please enter a GitHub COBOL file URL.');
-      return;
-    }
-
-    setIsFetching(true);
-    setFetchError(null);
-    setFetchSuccess(null);
-
-    try {
-      const fetched = await fetchGitHubCobolFile(targetUrl);
-      
-      const newFile = {
-        id: `gh-${Date.now()}`,
-        name: fetched.name,
-        extension: fetched.extension,
-        type: `GitHub Ingested (${fetched.extension})`,
-        size: `${fetched.sizeKb} KB`,
-        loc: fetched.lineCount,
-        programId: fetched.name.split('.')[0].toUpperCase(),
-        status: 'Retrieved & Verified',
-        content: fetched.content,
-        isCobol: true,
-        source: 'GitHub',
-        repoInfo: `${fetched.owner}/${fetched.repo} (${fetched.branch})`,
-        rawUrl: fetched.rawUrl
-      };
-
-      // Add to available files and make active
-      setAllFiles(prev => [newFile, ...prev.filter(f => f.name !== newFile.name)]);
-      setActiveFile(newFile);
-      setFetchSuccess(`Successfully fetched ${newFile.name} (${newFile.loc} lines) from GitHub.`);
-      setGithubUrl('');
-      setHighlightedLines(null);
-    } catch (err) {
-      setFetchError(err.message || 'Failed to retrieve file from GitHub.');
-    } finally {
-      setIsFetching(false);
-    }
+    if (!targetUrl.trim()) return;
+    await ingestGitHubFile(targetUrl);
+    setGithubUrl('');
   };
 
   // Quick load demo banking file
-  const handleSelectFile = (file) => {
+  const handleSelectFile = async (file) => {
     setActiveFile(file);
-    setFetchError(null);
-    setFetchSuccess(null);
+    clearMessages();
     if (file.name === 'PENALTY.cbl') {
       setHighlightedLines([37, 44]);
       setSelectedRuleId('BR-001');
-      setSelectedParagraphId(COBOL_PARAGRAPHS[0].id);
+      setSelectedParagraphId(referenceParagraphs[0]?.id || 'para-2100');
     } else {
       setHighlightedLines(null);
     }
+    await analyzeSource(file.name, file.content, file.repoInfo);
   };
 
   // Rule selection handler: Highlights actual source lines in the center viewer
   const handleSelectRule = (rule) => {
     setSelectedRuleId(rule.id);
-    // Parse line references e.g. "Lines 37–44" -> [37, 44]
-    const match = rule.lines.match(/(\d+)[–-](\d+)/);
-    if (match) {
-      const start = parseInt(match[1], 10);
-      const end = parseInt(match[2], 10);
-      setHighlightedLines([start, end]);
+    if (rule.startLine && rule.endLine) {
+      setHighlightedLines([rule.startLine, rule.endLine]);
+    } else if (rule.startLine) {
+      setHighlightedLines([rule.startLine, rule.startLine + 3]);
     } else {
       setHighlightedLines(null);
     }
 
     // Match paragraph
-    const matchedPara = COBOL_PARAGRAPHS.find(p => p.name === rule.paragraph);
+    const matchedPara = paragraphList.find(p => p.name === rule.paragraph);
     if (matchedPara) {
       setSelectedParagraphId(matchedPara.id);
     }
@@ -132,11 +149,16 @@ export default function CobolAnalysisSection({
       <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider block">
-              COBOL Source Ingestion
-            </span>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
+                COBOL Source Ingestion
+              </span>
+              <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs" dot>
+                {isBackendOnline ? 'Backend Engine Connected' : 'Offline Reference Mode'}
+              </Badge>
+            </div>
             <h3 className="text-sm font-semibold text-slate-900">
-              Fetch COBOL Program from Public GitHub Repository
+              Fetch & Analyze COBOL Program from Public GitHub Repository
             </h3>
           </div>
           <span className="text-xs text-slate-500 font-mono">
@@ -153,24 +175,24 @@ export default function CobolAnalysisSection({
             onKeyDown={(e) => e.key === 'Enter' && handleFetchGitHub()}
             placeholder="https://github.com/owner/repository/blob/main/PENALTY.cbl"
             className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            disabled={isFetching}
+            disabled={isAnalyzing}
           />
 
           <Button
             variant="primary"
             size="sm"
             onClick={() => handleFetchGitHub()}
-            disabled={isFetching}
+            disabled={isAnalyzing}
             className="shrink-0"
           >
-            {isFetching ? 'Retrieving...' : 'Fetch & Verify Source'}
+            {isAnalyzing ? 'Analyzing with Engine...' : 'Fetch & Analyze Source'}
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => handleSelectFile(COBOL_DEMO_FILES[0])}
-            disabled={isFetching}
+            onClick={() => handleSelectFile(stagedFiles[0])}
+            disabled={isAnalyzing}
             className="shrink-0"
           >
             Load Sample PENALTY.cbl
@@ -178,12 +200,12 @@ export default function CobolAnalysisSection({
         </div>
 
         {/* Status Messages */}
-        {fetchError && (
+        {analysisError && (
           <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2">
-            <span>{fetchError}</span>
+            <span>{analysisError}</span>
             <button 
               type="button" 
-              onClick={() => setFetchError(null)} 
+              onClick={clearMessages} 
               className="text-rose-600 hover:text-rose-900 font-bold px-1 text-xs cursor-pointer"
             >
               Dismiss
@@ -191,12 +213,12 @@ export default function CobolAnalysisSection({
           </div>
         )}
 
-        {fetchSuccess && (
+        {analysisSuccess && (
           <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2">
-            <span>{fetchSuccess}</span>
+            <span>{analysisSuccess}</span>
             <button 
               type="button" 
-              onClick={() => setFetchSuccess(null)} 
+              onClick={clearMessages} 
               className="text-emerald-600 hover:text-emerald-900 font-bold px-1 text-xs cursor-pointer"
             >
               Dismiss
@@ -213,13 +235,10 @@ export default function CobolAnalysisSection({
               type="button"
               onClick={() => {
                 setGithubUrl(sample.demoValue);
-                // For demo sample URL simulation, load the matching local sample file
                 if (sample.name.includes('PENALTY')) {
-                  handleSelectFile(COBOL_DEMO_FILES[0]);
-                  setFetchSuccess(`Loaded local verified copy of ${sample.name}`);
-                } else {
-                  handleSelectFile(COBOL_DEMO_FILES[1]);
-                  setFetchSuccess(`Loaded local verified copy of ${sample.name}`);
+                  handleSelectFile(stagedFiles[0]);
+                } else if (stagedFiles[1]) {
+                  handleSelectFile(stagedFiles[1]);
                 }
               }}
               className="font-mono text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors cursor-pointer"
@@ -240,33 +259,33 @@ export default function CobolAnalysisSection({
           <Card
             title="File Metadata"
             badge={
-              <Badge variant={activeFile.source === 'GitHub' ? 'purple' : 'neutral'} size="xs">
-                {activeFile.source || 'Local Demo'}
+              <Badge variant={activeFile?.source?.includes('GitHub') ? 'purple' : 'neutral'} size="xs">
+                {activeFile?.source || 'Local Demo'}
               </Badge>
             }
           >
             <div className="space-y-2 text-xs">
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Filename</span>
-                <span className="font-mono font-bold text-slate-900 text-[11px]">{activeFile.name}</span>
+                <span className="font-mono font-bold text-slate-900 text-[11px]">{activeFile?.name}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block">Lines (LOC)</span>
-                  <span className="font-mono text-slate-800">{activeFile.loc}</span>
+                  <span className="font-mono text-slate-800">{activeFile?.loc || sourceLines.length}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block">File Size</span>
-                  <span className="font-mono text-slate-800">{activeFile.size}</span>
+                  <span className="font-mono text-slate-800">{activeFile?.size}</span>
                 </div>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Program Identifier</span>
                 <span className="font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[11px] inline-block font-semibold">
-                  {activeFile.programId || 'UNSPECIFIED'}
+                  {activeFile?.programId || activeFile?.name?.split('.')[0]?.toUpperCase() || 'UNSPECIFIED'}
                 </span>
               </div>
-              {activeFile.repoInfo && (
+              {activeFile?.repoInfo && (
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block">Repository</span>
                   <span className="font-mono text-slate-600 text-[10px] truncate block">{activeFile.repoInfo}</span>
@@ -278,14 +297,14 @@ export default function CobolAnalysisSection({
           {/* Staged COBOL Files List */}
           <Card
             title="Staged Files"
-            badge={<Badge variant="neutral" size="xs">{allFiles.length}</Badge>}
+            badge={<Badge variant="neutral" size="xs">{stagedFiles.length}</Badge>}
           >
             <div className="space-y-1.5">
-              {allFiles.map((file) => {
-                const isSelected = file.id === activeFile.id;
+              {stagedFiles.map((file) => {
+                const isSelected = file.id === activeFile?.id || file.name === activeFile?.name;
                 return (
                   <button
-                    key={file.id}
+                    key={file.id || file.name}
                     type="button"
                     onClick={() => handleSelectFile(file)}
                     className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all cursor-pointer flex items-center justify-between ${
@@ -296,7 +315,7 @@ export default function CobolAnalysisSection({
                   >
                     <div className="truncate pr-2">
                       <div className="font-mono font-medium truncate">{file.name}</div>
-                      <div className="text-[10px] text-slate-400">{file.loc} lines • {file.type.split(' ')[1] || 'Source'}</div>
+                      <div className="text-[10px] text-slate-400">{file.loc || file.content?.split('\n').length} lines • {file.extension}</div>
                     </div>
                     <Badge variant={file.extension === '.cbl' ? 'info' : 'neutral'} size="xs">
                       {file.extension}
@@ -307,15 +326,15 @@ export default function CobolAnalysisSection({
             </div>
           </Card>
 
-          {/* Paragraph Navigation (When viewing PENALTY.cbl) */}
+          {/* Paragraph Navigation */}
           <Card
             title="Paragraph Explorer"
             subtitle="Click to highlight in viewer"
-            badge={<Badge variant="info" size="xs">{COBOL_PARAGRAPHS.length}</Badge>}
+            badge={<Badge variant="info" size="xs">{paragraphList.length}</Badge>}
           >
             <div className="space-y-1.5">
-              {COBOL_PARAGRAPHS.map((p) => {
-                const isSelected = selectedParagraphId === p.id;
+              {paragraphList.map((p) => {
+                const isSelected = selectedParagraphId === p.id || p.name === activeParagraph?.name;
                 return (
                   <button
                     key={p.id}
@@ -344,7 +363,7 @@ export default function CobolAnalysisSection({
            ========================================================================= */}
         <div className="lg:col-span-6 space-y-3">
           <Card
-            title={`Source Code: ${activeFile.name}`}
+            title={`Source Code: ${activeFile?.name || 'Source'}`}
             subtitle={highlightedLines ? `Highlighting Lines ${highlightedLines[0]}–${highlightedLines[1]}` : `Total ${sourceLines.length} lines`}
             badge={
               <Badge variant="neutral" size="xs">
@@ -446,7 +465,7 @@ export default function CobolAnalysisSection({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Rules ({COBOL_BUSINESS_RULES.length})
+              Rules ({displayRules.length})
             </button>
             <button
               type="button"
@@ -476,13 +495,13 @@ export default function CobolAnalysisSection({
           {rightPanelTab === 'RULES' && (
             <Card
               title="Extracted Rules"
-              subtitle="Click to locate in source"
-              badge={<Badge variant="info" size="xs">AST Grounded</Badge>}
+              subtitle={isBackendOnline ? 'Genuinely extracted from backend engine' : 'Click to locate in source'}
+              badge={<Badge variant={isBackendOnline ? 'success' : 'info'} size="xs">{isBackendOnline ? 'Live Engine' : 'Grounded AST'}</Badge>}
             >
-              <div className="space-y-2.5">
-                {COBOL_BUSINESS_RULES.map((rule) => {
+              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                {displayRules.map((rule) => {
                   const isSelected = selectedRuleId === rule.id;
-                  const isDisputed = rule.id === 'BR-001' && isReassessed;
+                  const isDisputed = rule.status === 'CONFLICTED_BY_EVIDENCE';
 
                   return (
                     <div
@@ -495,7 +514,9 @@ export default function CobolAnalysisSection({
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-bold text-slate-900">{rule.id}</span>
+                        <span className="font-mono font-bold text-slate-900 truncate max-w-[150px]">
+                          {rule.id.startsWith('BR-') ? rule.id.split('-').slice(0, 2).join('-') : rule.id}
+                        </span>
                         <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 font-semibold">
                           {rule.lines}
                         </span>
@@ -503,14 +524,18 @@ export default function CobolAnalysisSection({
                       <div className="font-semibold text-slate-800 text-[11px] mb-1">
                         {rule.title}
                       </div>
-                      <div className="text-[11px] text-slate-500 font-mono bg-slate-50 p-1.5 rounded border border-slate-100 mb-1.5">
-                        {rule.observedCondition}
-                      </div>
+                      {rule.observedCondition && (
+                        <div className="text-[11px] text-slate-500 font-mono bg-slate-50 p-1.5 rounded border border-slate-100 mb-1.5 leading-snug">
+                          {rule.observedCondition}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-100">
                         <Badge variant={isDisputed ? 'danger' : 'success'} size="xs">
-                          {isDisputed ? 'CONFLICTING (INC-101)' : 'SUPPORTED'}
+                          {isDisputed ? 'CONFLICTED (INC-101)' : 'OBSERVED_IN_CODE'}
                         </Badge>
-                        <span className="text-slate-400 font-mono">Target: {rule.targetJavaEntity.split('.')[0]}</span>
+                        <span className="text-slate-400 font-mono">
+                          {rule.recommendation ? `Action: ${rule.recommendation}` : 'Rule Candidate'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -527,7 +552,7 @@ export default function CobolAnalysisSection({
               badge={<Badge variant="neutral" size="xs">Data Dict</Badge>}
             >
               <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
-                {WORKING_STORAGE_ITEMS.map((item, idx) => (
+                {referenceDataItems.map((item, idx) => (
                   <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
                     <div className="flex items-center justify-between font-mono font-bold text-slate-900 text-[11px]">
                       <span>{item.name}</span>
@@ -559,6 +584,18 @@ export default function CobolAnalysisSection({
                     <div>✓ PROCEDURE DIVISION (Line 21)</div>
                   </div>
                 </div>
+
+                {/* Actual unsupported constructs from report if present */}
+                {report?.verification?.unsupported && report.verification.unsupported.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="font-semibold text-slate-900 block text-[11px]">Unsupported Constructs Found:</span>
+                    {report.verification.unsupported.map((u, i) => (
+                      <div key={i} className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-mono">
+                        {u.construct} at Line {u.line} ({u.file})
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Audit Warning Callout */}
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
@@ -595,13 +632,15 @@ export default function CobolAnalysisSection({
               PERFORM Dependency Chain
             </span>
             <div className="font-mono text-slate-900 text-[11px]">
-              {activeParagraph.performedBy.length > 0 
+              {dependencies[`PENALTY.cbl:${activeParagraph.name}`]
+                ? `${activeParagraph.name} → ${dependencies[`PENALTY.cbl:${activeParagraph.name}`].join(', ') || 'Leaf'}`
+                : activeParagraph.performedBy && activeParagraph.performedBy.length > 0 
                 ? `${activeParagraph.performedBy.join(', ')} → ${activeParagraph.name}`
-                : `Root: ${activeParagraph.name}`
+                : `Routine: ${activeParagraph.name}`
               }
             </div>
             <p className="text-[11px] text-slate-500">
-              Modifies: <code className="text-slate-800 font-bold">{activeParagraph.dataItemsModified.join(', ') || 'None'}</code>
+              {isBackendOnline ? 'Engine mapped call chain' : 'Observed PERFORM invocation'}
             </p>
           </div>
 
@@ -611,14 +650,14 @@ export default function CobolAnalysisSection({
               Risk & Evidence Posture
             </span>
             <div className="font-semibold text-slate-900">
-              {activeParagraph.name.includes('2100') && isReassessed 
-                ? 'High Risk: Disputed Exemption Logic' 
+              {isReassessed 
+                ? 'High / Critical Risk (INC-101 Conflict)' 
                 : 'Medium Risk: Deterministic Deduction'
               }
             </div>
             <p className="text-[11px] text-slate-500">
-              {activeParagraph.name.includes('2100') && isReassessed
-                ? 'Contradicted by production incident INC-101'
+              {isReassessed
+                ? 'Incident INC-101 reports active billing dispute on extension waivers'
                 : 'Observed AST conditional meets baseline requirements'
               }
             </p>
@@ -631,7 +670,7 @@ export default function CobolAnalysisSection({
                 Target Java 21 Spring Service
               </span>
               <div className="font-mono text-blue-700 font-semibold text-[11px] truncate">
-                {activeParagraph.targetJavaClass.split('.').pop()}
+                PenaltyCalculationService.java
               </div>
             </div>
             <Button

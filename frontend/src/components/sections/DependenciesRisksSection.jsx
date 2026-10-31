@@ -1,77 +1,74 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
+import { useProject } from '../../context/ProjectContext';
 
-export default function DependenciesRisksSection({
-  onNavigate,
-  isReassessed = false
-}) {
+export default function DependenciesRisksSection({ onNavigate }) {
+  const {
+    dependencies,
+    findings,
+    report,
+    isReassessed,
+    isBackendOnline,
+    evaluateImpact,
+    impactMap,
+    referenceParagraphs
+  } = useProject();
+
   const [selectedParagraph, setSelectedParagraph] = useState('2100-CALCULATE-PENALTY');
 
-  // Paragraph dependency relationships grounded in PENALTY.cbl
-  const DEPENDENCY_DATA = {
-    '2100-CALCULATE-PENALTY': {
-      name: '2100-CALCULATE-PENALTY',
-      ruleId: 'BR-001',
-      loc: 'Lines 37–44',
-      type: 'Arithmetic Calculation Leaf Routine',
-      callers: ['2000-PROCESS-PAYMENT (PERFORM)'],
-      callees: [],
-      dataRead: ['WS-BALANCE', 'WS-PENALTY-THRESHOLD', 'WS-DEFAULT-PENALTY'],
-      dataMutated: ['WS-PENALTY'],
-      riskRating: isReassessed ? 'High (Disputed Logic)' : 'Medium (Deterministic)',
-      riskVariant: isReassessed ? 'danger' : 'warning',
-      downstreamImpact: [
-        '2000-PROCESS-PAYMENT (Subtracts penalty from balance during payment)',
-        'Monthly Customer Statement Batch (JCL STEP 04)',
-        'Retail Core Fee Journal (GL Ledger 2041)'
-      ],
-      unsupportedConstructs: [
-        'Omission of WS-PAYMENT-EXT-FLAG check defined in copybook ACCTREC.cpy',
-        'Implicit currency rounding (PIC 9(5)V99 fixed-point arithmetic)'
-      ]
-    },
-    '2000-PROCESS-PAYMENT': {
-      name: '2000-PROCESS-PAYMENT',
-      ruleId: 'BR-002',
-      loc: 'Lines 31–35',
-      type: 'Transaction Settlement Routine',
-      callers: ['0000-MAIN-PROCESS (PERFORM)'],
-      callees: ['2100-CALCULATE-PENALTY (PERFORM)'],
-      dataRead: ['WS-BALANCE', 'WS-PENALTY'],
-      dataMutated: ['WS-BALANCE'],
-      riskRating: 'High (Direct State Mutation)',
-      riskVariant: 'danger',
-      downstreamImpact: [
-        'WS-BALANCE (Net customer ledger balance mutated)',
-        '1000-CHECK-ACCOUNT-STATUS (Evaluates negative balance)',
-        'Core Banking Database Ledger'
-      ],
-      unsupportedConstructs: [
-        'Missing transaction isolation / rollback guard if network drops post-deduction'
-      ]
-    },
-    '1000-CHECK-ACCOUNT-STATUS': {
-      name: '1000-CHECK-ACCOUNT-STATUS',
-      ruleId: 'BR-003',
-      loc: 'Lines 24–29',
-      type: 'State Classification Routine',
-      callers: ['0000-MAIN-PROCESS (PERFORM)'],
-      callees: [],
-      dataRead: ['WS-BALANCE'],
-      dataMutated: ['WS-ACCOUNT-STATUS'],
-      riskRating: 'Low (Self-Contained)',
-      riskVariant: 'success',
-      downstreamImpact: [
-        'WS-ACCOUNT-STATUS ("ACTIVE" / "OVERDRAWN")',
-        'Downstream Withdrawal Authorization Gate'
-      ],
-      unsupportedConstructs: []
+  // Trigger impact assessment when paragraph changes if finding exists
+  useEffect(() => {
+    const matchingFinding = findings.find(f => f.function === selectedParagraph);
+    if (matchingFinding && !impactMap[matchingFinding.id]) {
+      evaluateImpact(matchingFinding.id);
     }
-  };
+  }, [selectedParagraph, findings, impactMap, evaluateImpact]);
 
-  const currentDep = DEPENDENCY_DATA[selectedParagraph];
+  // Build dependency items from backend or reference
+  const dependencyItems = useMemo(() => {
+    const list = ['2100-CALCULATE-PENALTY', '2000-PROCESS-PAYMENT', '1000-CHECK-ACCOUNT-STATUS'];
+
+    return list.map(paraName => {
+      // Look up in backend dependencies
+      const matchingKey = Object.keys(dependencies).find(k => k.endsWith(`:${paraName}`) || k === paraName);
+      const callees = matchingKey ? dependencies[matchingKey] : (paraName === '2000-PROCESS-PAYMENT' ? ['2100-CALCULATE-PENALTY'] : []);
+      
+      // Look up callers (who calls this paragraph?)
+      const callers = Object.keys(dependencies).filter(k => dependencies[k]?.includes(paraName)).map(k => k.includes(':') ? k.split(':')[1] : k);
+
+      // Look up finding for risk score
+      const finding = findings.find(f => f.function === paraName);
+      const impact = finding ? impactMap[finding.id] : null;
+
+      const riskCategory = impact?.risk_category || finding?.risk_category || (paraName === '2100-CALCULATE-PENALTY' && isReassessed ? 'CRITICAL' : paraName === '1000-CHECK-ACCOUNT-STATUS' ? 'LOW' : 'HIGH');
+      const riskScore = impact?.risk_score || finding?.risk_score || (riskCategory === 'CRITICAL' ? 90 : riskCategory === 'HIGH' ? 65 : 25);
+
+      const refPara = referenceParagraphs.find(p => p.name === paraName);
+
+      return {
+        name: paraName,
+        loc: refPara ? `Lines ${refPara.lineStart}–${refPara.lineEnd}` : 'PROCEDURE DIVISION',
+        ruleId: finding ? finding.id.slice(0, 8) : refPara ? `BR-00${list.indexOf(paraName) + 1}` : 'BR-EXT',
+        callers: callers.length > 0 ? callers.map(c => `${c} (PERFORM)`) : (paraName === '2100-CALCULATE-PENALTY' ? ['2000-PROCESS-PAYMENT (PERFORM)'] : paraName === '2000-PROCESS-PAYMENT' ? ['0000-MAIN-PROCESS (PERFORM)'] : ['0000-MAIN-PROCESS (PERFORM)']),
+        callees: callees.length > 0 ? callees.map(c => `${c} (PERFORM)`) : [],
+        dataRead: refPara?.dataItemsRead || ['WS-BALANCE'],
+        dataMutated: refPara?.dataItemsModified || ['WS-BALANCE'],
+        riskRating: `${riskCategory} (${riskScore}/100)`,
+        riskCategory,
+        riskScore,
+        riskReasons: impact?.risk_reasons || (riskCategory === 'CRITICAL' ? ['Production incident INC-101 reports conflicting logic', 'Missing payment extension exemption check'] : ['State variable mutation during transaction processing']),
+        downstreamImpact: impact?.affected || [
+          paraName === '2100-CALCULATE-PENALTY' 
+            ? '2000-PROCESS-PAYMENT (Mutates balance during settlement)' 
+            : 'Core Banking Ledger Database'
+        ]
+      };
+    });
+  }, [dependencies, findings, impactMap, isReassessed, referenceParagraphs]);
+
+  const currentDep = dependencyItems.find(d => d.name === selectedParagraph) || dependencyItems[0];
 
   return (
     <div className="space-y-5">
@@ -82,15 +79,15 @@ export default function DependenciesRisksSection({
             <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
               Architecture Analysis
             </span>
-            <Badge variant="neutral" size="xs">
-              PENALTY.cbl Call Graph
+            <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs" dot>
+              {isBackendOnline ? 'Live Backend Call Graph' : 'Reference Model'}
             </Badge>
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
             Dependencies & Modernization Blast Radius
           </h2>
           <p className="text-xs text-slate-600 max-w-2xl mt-0.5">
-            Trace PERFORM call relationships, inspect WORKING-STORAGE state mutations, identify downstream ripple effects, and review potential modernization blindspots before refactoring.
+            Trace PERFORM and CALL relationships, inspect WORKING-STORAGE state mutations, identify downstream ripple effects, and review potential modernization blindspots before refactoring.
           </p>
         </div>
 
@@ -114,14 +111,13 @@ export default function DependenciesRisksSection({
           </span>
 
           <div className="space-y-2">
-            {Object.keys(DEPENDENCY_DATA).map((pKey) => {
-              const dep = DEPENDENCY_DATA[pKey];
-              const isSelected = selectedParagraph === pKey;
+            {dependencyItems.map((dep) => {
+              const isSelected = selectedParagraph === dep.name;
 
               return (
                 <div
-                  key={pKey}
-                  onClick={() => setSelectedParagraph(pKey)}
+                  key={dep.name}
+                  onClick={() => setSelectedParagraph(dep.name)}
                   className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-blue-50 border-blue-400 shadow-2xs'
@@ -129,20 +125,20 @@ export default function DependenciesRisksSection({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono font-bold text-xs text-slate-900">
+                    <span className="font-mono font-bold text-xs text-slate-900 truncate">
                       {dep.name}
                     </span>
                     <span className="text-[10px] font-mono text-slate-500">
                       {dep.loc}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-600 mb-2">
-                    Rule {dep.ruleId} • {dep.type}
+                  <div className="text-[11px] text-slate-600 mb-2 truncate">
+                    {dep.callers.length} Caller(s) &rarr; {dep.callees.length} Callee(s)
                   </div>
                   <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100">
-                    <span className="text-slate-500">{dep.callers.length} Callers</span>
-                    <Badge variant={dep.riskVariant} size="xs">
-                      {dep.riskRating.split(' ')[0]} Risk
+                    <span className="text-slate-500 font-mono">Rule: {dep.ruleId}</span>
+                    <Badge variant={dep.riskCategory === 'CRITICAL' ? 'danger' : dep.riskCategory === 'HIGH' ? 'warning' : 'success'} size="xs">
+                      {dep.riskCategory} ({dep.riskScore})
                     </Badge>
                   </div>
                 </div>
@@ -167,7 +163,7 @@ export default function DependenciesRisksSection({
             title={`Blast Radius: ${currentDep.name}`}
             subtitle={`Grounded in ${currentDep.loc} • Associated Rule ${currentDep.ruleId}`}
             badge={
-              <Badge variant={currentDep.riskVariant} size="xs">
+              <Badge variant={currentDep.riskCategory === 'CRITICAL' ? 'danger' : currentDep.riskCategory === 'HIGH' ? 'warning' : 'success'} size="xs">
                 {currentDep.riskRating}
               </Badge>
             }
@@ -176,13 +172,13 @@ export default function DependenciesRisksSection({
               {/* Call Chain Diagram */}
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
                 <span className="font-semibold text-slate-900 text-xs block">
-                  Invocation Call Flow:
+                  Invocation Call Flow (PERFORM / CALL):
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                   <div className="p-2.5 rounded bg-white border border-slate-200 text-center">
                     <span className="text-[10px] text-slate-400 uppercase font-mono block">Upstream Caller</span>
                     <span className="font-mono font-bold text-slate-800 text-[11px] truncate block mt-0.5">
-                      {currentDep.callers.join(', ') || 'Root Invocations'}
+                      {currentDep.callers.join(', ') || 'Root Entry'}
                     </span>
                   </div>
 
@@ -231,6 +227,20 @@ export default function DependenciesRisksSection({
                 </div>
               </div>
 
+              {/* Risk Reasons from Engine */}
+              {currentDep.riskReasons && currentDep.riskReasons.length > 0 && (
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
+                  <span className="font-semibold text-slate-900 block text-[11px]">
+                    Risk Assessment Factors (Engine Evaluated):
+                  </span>
+                  <ul className="space-y-1 text-slate-600 list-disc list-inside text-[11px]">
+                    {currentDep.riskReasons.map((reason, idx) => (
+                      <li key={idx}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Downstream Ripple Targets */}
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
                 <span className="font-semibold text-slate-900 block text-[11px]">
@@ -243,15 +253,17 @@ export default function DependenciesRisksSection({
                 </ul>
               </div>
 
-              {/* Unsupported Constructs / Modernization Warnings */}
-              {currentDep.unsupportedConstructs.length > 0 && (
+              {/* Actual Unsupported Constructs from Backend Report if any */}
+              {report?.verification?.unsupported && report.verification.unsupported.length > 0 && (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
                   <span className="font-bold text-[11px] block">
-                    Modernization Warnings & Blindspots:
+                    Unsupported Constructs Flagged by Engine:
                   </span>
                   <ul className="space-y-0.5 text-[11px] text-slate-700 list-disc list-inside">
-                    {currentDep.unsupportedConstructs.map((warning, idx) => (
-                      <li key={idx}>{warning}</li>
+                    {report.verification.unsupported.map((u, idx) => (
+                      <li key={idx}>
+                        <code>{u.construct}</code> at line {u.line} in {u.file}
+                      </li>
                     ))}
                   </ul>
                 </div>
