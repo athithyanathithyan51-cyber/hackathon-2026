@@ -1,0 +1,6 @@
+Incident ID: INC-101
+
+Customers with an approved payment extension should be exempt
+from the minimum balance penalty.
+
+The application appears to charge them incorrectly.
