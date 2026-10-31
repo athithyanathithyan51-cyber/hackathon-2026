@@ -28,18 +28,52 @@ export default function DependenciesRisksSection({ onNavigate }) {
 
   // Build dependency items from backend or reference
   const dependencyItems = useMemo(() => {
-    const list = ['2100-CALCULATE-PENALTY', '2000-PROCESS-PAYMENT', '1000-CHECK-ACCOUNT-STATUS'];
+    // Collect all unique paragraphs
+    const paraEntries = [];
 
-    return list.map(paraName => {
+    // From backend dependencies
+    Object.keys(dependencies).forEach(k => {
+      const parts = k.split(':');
+      const file = parts.length > 1 ? parts[0] : '';
+      const paraName = parts.length > 1 ? parts[1] : parts[0];
+      if (!paraEntries.some(p => p.name === paraName && p.file === file)) {
+        paraEntries.push({ name: paraName, file });
+      }
+    });
+
+    // From backend findings
+    findings.forEach(f => {
+      if (!paraEntries.some(p => p.name === f.function)) {
+        paraEntries.push({ name: f.function, file: f.file || '' });
+      }
+    });
+
+    // Default reference list if empty
+    if (paraEntries.length === 0) {
+      paraEntries.push(
+        { name: '2100-CALCULATE-PENALTY', file: 'PENALTY.cbl' },
+        { name: '2000-PROCESS-PAYMENT', file: 'PENALTY.cbl' },
+        { name: '1000-CHECK-ACCOUNT-STATUS', file: 'PENALTY.cbl' }
+      );
+    }
+
+    return paraEntries.map((entry, idx) => {
+      const paraName = entry.name;
+      const file = entry.file;
+
       // Look up in backend dependencies
-      const matchingKey = Object.keys(dependencies).find(k => k.endsWith(`:${paraName}`) || k === paraName);
+      const matchingKey = Object.keys(dependencies).find(
+        k => k === `${file}:${paraName}` || k.endsWith(`:${paraName}`) || k === paraName
+      );
       const callees = matchingKey ? dependencies[matchingKey] : (paraName === '2000-PROCESS-PAYMENT' ? ['2100-CALCULATE-PENALTY'] : []);
       
       // Look up callers (who calls this paragraph?)
-      const callers = Object.keys(dependencies).filter(k => dependencies[k]?.includes(paraName)).map(k => k.includes(':') ? k.split(':')[1] : k);
+      const callers = Object.keys(dependencies)
+        .filter(k => dependencies[k]?.includes(paraName))
+        .map(k => k.includes(':') ? k.split(':')[1] : k);
 
       // Look up finding for risk score
-      const finding = findings.find(f => f.function === paraName);
+      const finding = findings.find(f => f.function === paraName && (!file || f.file === file));
       const impact = finding ? impactMap[finding.id] : null;
 
       const riskCategory = impact?.risk_category || finding?.risk_category || (paraName === '2100-CALCULATE-PENALTY' && isReassessed ? 'CRITICAL' : paraName === '1000-CHECK-ACCOUNT-STATUS' ? 'LOW' : 'HIGH');
@@ -49,9 +83,10 @@ export default function DependenciesRisksSection({ onNavigate }) {
 
       return {
         name: paraName,
-        loc: refPara ? `Lines ${refPara.lineStart}–${refPara.lineEnd}` : 'PROCEDURE DIVISION',
-        ruleId: finding ? finding.id.slice(0, 8) : refPara ? `BR-00${list.indexOf(paraName) + 1}` : 'BR-EXT',
-        callers: callers.length > 0 ? callers.map(c => `${c} (PERFORM)`) : (paraName === '2100-CALCULATE-PENALTY' ? ['2000-PROCESS-PAYMENT (PERFORM)'] : paraName === '2000-PROCESS-PAYMENT' ? ['0000-MAIN-PROCESS (PERFORM)'] : ['0000-MAIN-PROCESS (PERFORM)']),
+        file: file || 'PENALTY.cbl',
+        loc: refPara ? `Lines ${refPara.lineStart}–${refPara.lineEnd}` : finding ? `Line ${finding.start_line}` : 'PROCEDURE DIVISION',
+        ruleId: finding ? finding.id.slice(0, 8) : refPara ? `BR-00${idx + 1}` : 'BR-EXT',
+        callers: callers.length > 0 ? callers.map(c => `${c} (PERFORM)`) : (paraName === '2100-CALCULATE-PENALTY' ? ['2000-PROCESS-PAYMENT (PERFORM)'] : ['0000-MAIN-PROCESS (PERFORM)']),
         callees: callees.length > 0 ? callees.map(c => `${c} (PERFORM)`) : [],
         dataRead: refPara?.dataItemsRead || ['WS-BALANCE'],
         dataMutated: refPara?.dataItemsModified || ['WS-BALANCE'],

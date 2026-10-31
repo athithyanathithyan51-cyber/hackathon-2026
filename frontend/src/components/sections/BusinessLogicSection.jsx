@@ -16,6 +16,7 @@ export default function BusinessLogicSection({ onNavigate }) {
   } = useProject();
 
   const [selectedRuleId, setSelectedRuleId] = useState(null);
+  const [fileFilter, setFileFilter] = useState('ALL');
   const [evidenceInput, setEvidenceInput] = useState(
     'Customers with an approved payment extension should be exempt from the minimum balance penalty. The application appears to charge these customers unconditionally.'
   );
@@ -55,14 +56,27 @@ export default function BusinessLogicSection({ onNavigate }) {
     return referenceRules.map(r => ({
       ...r,
       displayId: r.id,
+      program: activeFile?.name || 'PENALTY.cbl',
       riskVariant: r.risk.includes('High') ? 'danger' : r.risk.includes('Medium') ? 'warning' : 'neutral',
       isLiveBackend: false
     }));
   }, [findings, plan, referenceRules, activeFile]);
 
+  // Unique programs for grouping filter
+  const uniquePrograms = useMemo(() => {
+    const set = new Set(rules.map(r => r.program).filter(Boolean));
+    return Array.from(set);
+  }, [rules]);
+
+  // Filtered rules by selected program
+  const filteredRules = useMemo(() => {
+    if (fileFilter === 'ALL') return rules;
+    return rules.filter(r => r.program === fileFilter);
+  }, [rules, fileFilter]);
+
   // Select first rule by default
-  const activeSelectedId = selectedRuleId || rules[0]?.id;
-  const selectedRule = rules.find(r => r.id === activeSelectedId) || rules[0];
+  const activeSelectedId = selectedRuleId || filteredRules[0]?.id || rules[0]?.id;
+  const selectedRule = rules.find(r => r.id === activeSelectedId) || filteredRules[0] || rules[0];
 
   const handleSimulateEvidence = async () => {
     setIsSubmittingEvidence(true);
@@ -160,15 +174,48 @@ export default function BusinessLogicSection({ onNavigate }) {
         subtitle={`Scope: ${activeFile?.name || 'PENALTY.cbl'} • Source AST Grounded`}
         badge={
           <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs">
-            {rules.length} {isBackendOnline ? 'Engine Rules' : 'Reference Rules'}
+            {filteredRules.length} of {rules.length} Rules
           </Badge>
         }
       >
+        {/* Multi-File Program Filter Pills */}
+        {uniquePrograms.length > 1 && (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-100 text-xs">
+            <span className="text-[11px] font-semibold text-slate-500 font-mono">Filter by Program:</span>
+            <button
+              type="button"
+              onClick={() => setFileFilter('ALL')}
+              className={`px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer ${
+                fileFilter === 'ALL'
+                  ? 'bg-blue-600 text-white font-bold'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All Programs ({rules.length})
+            </button>
+            {uniquePrograms.map((prog) => (
+              <button
+                key={prog}
+                type="button"
+                onClick={() => setFileFilter(prog)}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer ${
+                  fileFilter === prog
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {prog.split('/').pop()} ({rules.filter(r => r.program === prog).length})
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Rule ID</th>
+                <th className="py-2.5 px-3">Program</th>
                 <th className="py-2.5 px-3">Paragraph / Function</th>
                 <th className="py-2.5 px-3">Lines</th>
                 <th className="py-2.5 px-3">Condition (Code Fact)</th>
@@ -178,7 +225,7 @@ export default function BusinessLogicSection({ onNavigate }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {rules.map((rule) => {
+              {filteredRules.map((rule) => {
                 const isSelected = rule.id === activeSelectedId;
                 const isDisputed = rule.verificationStatus === 'CONFLICTED_BY_EVIDENCE' || (rule.paragraph.includes('2100') && isReassessed);
 
@@ -194,6 +241,9 @@ export default function BusinessLogicSection({ onNavigate }) {
                   >
                     <td className="py-2.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
                       {rule.displayId || rule.id.slice(0, 10)}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">
+                      {rule.program.split('/').pop()}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-blue-700 font-semibold">
                       {rule.paragraph}

@@ -4,6 +4,7 @@ import { projectService } from '../services/projectService';
 import { analysisService } from '../services/analysisService';
 import { evidenceService } from '../services/evidenceService';
 import { reportService } from '../services/reportService';
+import { extractZipProject } from '../services/zipService';
 import { 
   COBOL_DEMO_FILES, 
   COBOL_BUSINESS_RULES,
@@ -24,6 +25,10 @@ export function ProjectProvider({ children }) {
   // Active source file in the workspace
   const [activeFile, setActiveFile] = useState(COBOL_DEMO_FILES[0]);
   const [stagedFiles, setStagedFiles] = useState(COBOL_DEMO_FILES);
+
+  // ZIP project summary and progress
+  const [zipSummary, setZipSummary] = useState(null);
+  const [zipProgress, setZipProgress] = useState(0);
 
   // Analysis loading & error states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -240,11 +245,92 @@ export function ProjectProvider({ children }) {
   }, [projectId]);
 
   /**
+   * Uploads, extracts, and analyzes a multi-file ZIP project
+   */
+  const uploadZipProject = useCallback(async (file) => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisSuccess(null);
+    setZipProgress(15);
+
+    try {
+      const extracted = await extractZipProject(file, (p) => {
+        setZipProgress(Math.min(90, Math.max(15, p)));
+      });
+      setZipProgress(95);
+
+      setProjectName(extracted.projectName);
+      setStagedFiles(extracted.files);
+      setZipSummary(extracted.summary);
+      setIsReassessed(false);
+      setEvidenceLog([]);
+
+      // Prioritize first COBOL program as default active file
+      const firstCobol = extracted.files.find(f => f.classification === 'cobol_program');
+      const defaultActive = firstCobol || extracted.files[0];
+      setActiveFile(defaultActive);
+
+      // Filter files to stage in the backend project
+      // Backend analyzes .cbl / .cob and stages copybooks .cpy
+      const supportedFiles = extracted.files.filter(
+        f => f.analysisSupport === 'supported' || f.analysisSupport === 'staged_reference'
+      );
+
+      const isConnected = await checkHealth();
+
+      if (isConnected && supportedFiles.length > 0) {
+        const payload = supportedFiles.map(f => ({
+          path: f.relativePath,
+          content: f.content
+        }));
+
+        const result = await projectService.createProject(extracted.projectName, payload);
+        const newPid = result.id;
+        setProjectId(newPid);
+        await refreshProjectData(newPid);
+
+        setAnalysisSuccess(
+          `Analyzed ZIP Project "${extracted.projectName}": Extracted ${extracted.files.length} file(s) (${extracted.summary.cobolPrograms} program(s), ${extracted.summary.copybooks} copybook(s)). Discovered ${result.function_count} paragraph(s) and ${result.rule_count} rule candidate(s).`
+        );
+      } else if (supportedFiles.length === 0) {
+        setProjectId(null);
+        setAnalysisSuccess(
+          `Extracted ${extracted.files.length} project file(s). No COBOL (.cbl, .cob) programs detected for AST engine analysis.`
+        );
+      } else {
+        setProjectId(null);
+        setAnalysisSuccess(
+          `Loaded ${extracted.files.length} file(s) in local inspection mode (Backend offline: start uvicorn backend.main:app to run live AST analysis).`
+        );
+      }
+    } catch (err) {
+      setAnalysisError(err.message || 'Failed to extract and analyze ZIP archive.');
+    } finally {
+      setIsAnalyzing(false);
+      setZipProgress(100);
+    }
+  }, [checkHealth, refreshProjectData]);
+
+  /**
+   * Switches the active inspected file within the staged project
+   */
+  const selectFile = useCallback((fileIdOrPath) => {
+    const file = stagedFiles.find(
+      f => f.id === fileIdOrPath || f.relativePath === fileIdOrPath || f.name === fileIdOrPath
+    );
+    if (file) {
+      setActiveFile(file);
+    }
+  }, [stagedFiles]);
+
+  /**
    * Loads the demo banking application PENALTY.cbl
    */
   const loadDemoBanking = useCallback(async () => {
     const demo = COBOL_DEMO_FILES[0];
     setActiveFile(demo);
+    setStagedFiles(COBOL_DEMO_FILES);
+    setZipSummary(null);
     setIsReassessed(false);
     setEvidenceLog([]);
     await analyzeSource(demo.name, demo.content);
@@ -263,6 +349,12 @@ export function ProjectProvider({ children }) {
     setActiveFile,
     stagedFiles,
     setStagedFiles,
+    selectFile,
+
+    // ZIP Multi-File Project State
+    zipSummary,
+    zipProgress,
+    uploadZipProject,
 
     // Analysis Loading & Errors
     isAnalyzing,
