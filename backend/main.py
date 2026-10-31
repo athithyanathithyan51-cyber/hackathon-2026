@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from backend.store import history_for, load_project, save_project
 from legacyiq_engine.analyzer.ast_analyzer import analyze_source
+from legacyiq_engine.analyzer.cobol_analyzer import analyze_cobol
 from legacyiq_engine.analyzer.rule_extractor import extract_rule_candidates
 from legacyiq_engine.assessment.risk_assessor import assess_risk
 from legacyiq_engine.assessment.test_generator import generate_test_suggestions
@@ -67,6 +68,19 @@ def _latest(history, finding_id):
     return version
 
 
+def _analyze(source):
+    """Pick the analyzer by file extension. Returns None for files that are stored as evidence only.
+
+    Copybooks (.cpy) and data files are not programs, so they are stored but not analyzed.
+    """
+    path = source.path.lower()
+    if path.endswith(".py"):
+        return analyze_source(source.content, file_path=source.path)
+    if path.endswith((".cbl", ".cob")):
+        return analyze_cobol(source.path, source.content)
+    return None
+
+
 def _recommend(risk, matches):
     """Suggest an action. Always a suggestion for human review, never applied automatically."""
     if risk.risk_category.value == "CRITICAL" or any(
@@ -92,10 +106,9 @@ def create_project(request: ProjectRequest):
     function_count = 0
 
     for source in request.files:
-        # Only Python is analyzed in this version; other files are stored as evidence
-        if not source.path.endswith(".py"):
+        result = _analyze(source)
+        if result is None:
             continue
-        result = analyze_source(source.content, file_path=source.path)
         if not result.syntax_valid:
             raise HTTPException(status_code=422, detail=result.error_message)
 

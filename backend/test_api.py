@@ -109,3 +109,40 @@ def test_non_python_files_are_stored_but_not_analyzed(client):
 def test_unknown_project_returns_404(client):
     assert client.get("/api/projects/does-not-exist").status_code == 404
     assert client.get("/api/projects/does-not-exist/overview").status_code == 404
+
+
+COBOL_FEE = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. FEE-CALC.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           PERFORM CHECK-BALANCE
+           STOP RUN.
+       CHECK-BALANCE.
+           IF WS-BALANCE < 1000
+              DISPLAY 'Low balance'
+           END-IF.
+"""
+
+
+def test_any_cobol_program_is_analyzed_without_project_specific_code(client):
+    response = _create(client, [{"path": "any-system/fee.cbl", "content": COBOL_FEE}])
+    assert response.status_code == 200
+    project_id = response.json()["id"]
+    findings = client.get(f"/api/projects/{project_id}/findings").json()
+    assert len(findings) == 1
+    assert findings[0]["function"] == "CHECK-BALANCE"
+    assert findings[0]["file"] == "any-system/fee.cbl"
+    assert findings[0]["start_line"] == 8
+
+
+def test_copybook_is_stored_but_not_analyzed(client):
+    response = _create(client, [{"path": "ACCOUNTS.CPY", "content": "       01 ACCOUNT-RECORD.\n"}])
+    assert response.status_code == 200
+    assert response.json()["rule_count"] == 0
+
+
+def test_cobol_without_procedure_division_returns_422(client):
+    response = _create(client, [{"path": "broken.cbl", "content": "       01 X PIC 9.\n"}])
+    assert response.status_code == 422
+    assert "PROCEDURE DIVISION" in response.json()["detail"]
