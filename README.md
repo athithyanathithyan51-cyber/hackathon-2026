@@ -26,33 +26,52 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 **Critical rule:** code that looks obsolete must not be marked removable if it implements an undocumented but critical business rule. Old technology alone is never a reason to delete or rewrite.
 
-## API Contract (v1)
+## API Contract (v3)
 
-All responses are JSON. Base path: `/api`.
+Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown project or finding, `422` invalid body or Python that does not parse.
 
-| Method | Path | Body / Query | Response |
+**Status:** all endpoints below are implemented and tested. Not built yet: the `functions` listing and the `report` endpoint. Scope is modernization planning and risk only: no code conversion.
+
+**Supported inputs:** Python (`.py`) and COBOL (`.cbl`, `.cob`). Analysis only; no code is converted or rewritten. Copybooks (`.cpy`) and other files are stored as evidence only.
+
+**Rules for every endpoint**
+- Uploaded code is parsed, never executed.
+- Every finding carries a real `file` and `start_line`.
+- Each finding is versioned. Adding evidence creates a new version; earlier versions are kept.
+- Each project has its own history database, so projects never share findings.
+- Any call to an operating-system command (for example `CALL 'SYSTEM'`) is CRITICAL risk and is listed under "Stop and fix first" in the plan.
+
+| Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/analyses` | `{ "name": str, "artifacts": [{ "type": "code\|schema\|config\|interface\|doc\|incident\|ticket", "path": str, "content": str }] }` | `{ "id": str, "status": "queued" }` |
-| GET | `/api/analyses/{id}` | - | `{ "id", "name", "status": "queued\|running\|done\|failed" }` |
-| GET | `/api/analyses/{id}/business-rules` | - | `[{ "id", "description", "source", "evidence", "confidence", "critical", "documented" }]` |
-| GET | `/api/analyses/{id}/dependencies` | - | `{ "nodes": [{ "id", "type" }], "edges": [{ "from", "to", "kind" }] }` |
-| GET | `/api/analyses/{id}/heatmap` | - | `[{ "component", "risk", "tech_debt", "obsolete", "verdict" }]` where `verdict` is `keep`, `review`, or `modernize` |
-| GET | `/api/analyses/{id}/report` | - | `{ "current_state", "tech_debt", "risks", "alternatives", "target_architecture", "roadmap", "test_strategy" }` |
+| GET | `/api/health` | - | `{ "status": "ok" }` |
+| POST | `/api/projects` | `{ "name", "files": [{ "path", "content" }] }` | `{ "id", "name", "status": "done", "file_count", "function_count", "rule_count" }` |
+| GET | `/api/projects/{id}` | - | `{ "id", "name", "file_count", "rule_count" }` |
+| GET | `/api/projects/{id}/dependencies` | - | `{ "<file>:<function>": ["<called function>"] }` |
+| POST | `/api/projects/{id}/evidence` | `{ "name", "content" }` | `{ "evidence", "linked_findings": [{ "finding_id", "match": "SUPPORTED\|CONFLICTED", "new_version" }] }` |
+| GET | `/api/projects/{id}/findings` | - | `[{ "id", "function", "file", "start_line", "version", "description", "evidence_status", "risk_score", "risk_category", "recommendation", "evidence": [{ "source", "match", "explanation" }] }]` |
+| GET | `/api/projects/{id}/findings/{fid}/history` | - | `[{ "version", "timestamp", "change_reason", "evidence_status", "risk_score", "risk_category" }]` |
+| POST | `/api/projects/{id}/impact` | `{ "finding_id" }` | `{ "finding_id", "risk_score", "risk_category", "risk_reasons": [str], "affected": ["<file>:<function>"], "regression_tests": [{ "input", "expected", "note" }], "recommendation" }` |
+| POST | `/api/projects/{id}/plan` | - | `{ "summary": { "rules", "blocked", "investigate" }, "phases": [{ "name", "actions": [str] }], "findings": [{ "id", "function", "file", "start_line", "condition", "risk_category", "risk_score", "blocked", "recommendation", "interpretation": { "business_explanation", "questions", "model", "is_fallback" } }] }` |
+| GET | `/api/projects/{id}/overview` | - | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
-Status codes: `200` success, `404` unknown id, `422` invalid body.
+**Enums**
+- `evidence_status`: `OBSERVED_IN_CODE`, `SUPPORTED_BY_EVIDENCE`, `CONFLICTED_BY_EVIDENCE`, `UNCERTAIN_EVIDENCE`
+- `risk_category`: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
+- `recommendation`: `retain`, `refactor`, `replace`, `investigate`. `investigate` when risk is CRITICAL or evidence conflicts. `refactor` when risk is HIGH. Otherwise `retain`. Always a suggestion for human review.
 
 ## Setup
 
+Run everything from the repository root.
+
 ```bash
-cd backend
-pip install -r requirements.txt
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 ```
 
 ## Run
 
 ```bash
-cd backend
-uvicorn main:app --reload
+uvicorn backend.main:app --reload
+python -m pytest
 ```
 
 Health check: http://127.0.0.1:8000/api/health
@@ -86,4 +105,4 @@ Project: **LegacyIQ**, an evidence-driven legacy application modernization assis
 7. Keep previous findings when new evidence arrives.
 8. A human reviews every consequential modernization decision.
 
-**Scope for the hackathon:** Python only. Java, C++ and other parsers, automatic code rewriting, runtime monitoring, and multi-agent systems are out of scope until the core workflow works.
+**Scope for the hackathon:** modernization planning and risk analysis for Python and COBOL. Code conversion, automatic rewriting, runtime monitoring and multi-agent systems are out of scope.
