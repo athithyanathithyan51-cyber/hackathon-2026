@@ -12,10 +12,19 @@ export default function BusinessLogicSection({ onNavigate }) {
     submitEvidence,
     referenceRules,
     isBackendOnline,
-    activeFile
+    activeFile,
+    navigationTarget,
+    clearNavigationTarget
   } = useProject();
 
-  const [selectedRuleId, setSelectedRuleId] = useState(null);
+  const [userSelectedRuleId, setUserSelectedRuleId] = useState(null);
+  const [prevNavTimestamp, setPrevNavTimestamp] = useState(navigationTarget?.timestamp);
+
+  if (navigationTarget?.timestamp !== prevNavTimestamp) {
+    setPrevNavTimestamp(navigationTarget?.timestamp);
+    setUserSelectedRuleId(null);
+  }
+
   const [fileFilter, setFileFilter] = useState('ALL');
   const [evidenceInput, setEvidenceInput] = useState(
     'Customers with an approved payment extension should be exempt from the minimum balance penalty. The application appears to charge these customers unconditionally.'
@@ -74,9 +83,19 @@ export default function BusinessLogicSection({ onNavigate }) {
     return rules.filter(r => r.program === fileFilter);
   }, [rules, fileFilter]);
 
-  // Select first rule by default
-  const activeSelectedId = selectedRuleId || filteredRules[0]?.id || rules[0]?.id;
+  // Determine matched rule ID from navigationTarget if provided
+  const navRuleId = useMemo(() => {
+    if (!navigationTarget?.ruleId) return null;
+    const match = rules.find(
+      r => r.id === navigationTarget.ruleId || r.displayId === navigationTarget.ruleId
+    );
+    return match ? match.id : null;
+  }, [navigationTarget, rules]);
+
+  // Select active rule: user manual selection -> deep navigation link -> default first
+  const activeSelectedId = userSelectedRuleId || navRuleId || filteredRules[0]?.id || rules[0]?.id;
   const selectedRule = rules.find(r => r.id === activeSelectedId) || filteredRules[0] || rules[0];
+  const setSelectedRuleId = setUserSelectedRuleId;
 
   const handleSimulateEvidence = async () => {
     setIsSubmittingEvidence(true);
@@ -89,6 +108,28 @@ export default function BusinessLogicSection({ onNavigate }) {
 
   return (
     <div className="space-y-5">
+      {/* Return to Modernization Report banner when navigated from report */}
+      {navigationTarget?.from === 'modernization-report' && (
+        <div className="flex items-center justify-between p-3 px-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
+              Modernization Flow
+            </span>
+            <span>Deep dive active: Inspecting business rules & evidence reconciliation linked from Modernization Report</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearNavigationTarget();
+              onNavigate('modernization-report');
+            }}
+            className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+          >
+            &larr; Back to Modernization Report
+          </button>
+        </div>
+      )}
+
       {/* Header Banner - White Primary, Soft-Neutral */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

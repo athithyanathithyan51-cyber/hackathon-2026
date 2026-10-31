@@ -30,6 +30,9 @@ export function ProjectProvider({ children }) {
   const [zipSummary, setZipSummary] = useState(null);
   const [zipProgress, setZipProgress] = useState(0);
 
+  // Cross-section interactive navigation state
+  const [navigationTarget, setNavigationTarget] = useState(null);
+
   // Analysis loading & error states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
@@ -324,6 +327,21 @@ export function ProjectProvider({ children }) {
   }, [stagedFiles]);
 
   /**
+   * Cross-section programmatic navigation with deep-link state
+   */
+  const navigateTo = useCallback((section, options = {}) => {
+    setNavigationTarget({ section, ...options, timestamp: Date.now() });
+    if (options.file) {
+      const targetFile = stagedFiles.find(
+        f => f.name === options.file || f.relativePath === options.file || f.id === options.file
+      );
+      if (targetFile) {
+        setActiveFile(targetFile);
+      }
+    }
+  }, [stagedFiles]);
+
+  /**
    * Loads the demo banking application PENALTY.cbl
    */
   const loadDemoBanking = useCallback(async () => {
@@ -389,7 +407,12 @@ export function ProjectProvider({ children }) {
     submitEvidence,
     evaluateImpact,
     loadDemoBanking,
-    resetProject: loadDemoBanking
+    resetProject: loadDemoBanking,
+
+    // Interactive Deep Navigation
+    navigationTarget,
+    navigateTo,
+    clearNavigationTarget: () => setNavigationTarget(null)
   };
 
   return (

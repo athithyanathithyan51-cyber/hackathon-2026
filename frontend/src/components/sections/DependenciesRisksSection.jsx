@@ -13,10 +13,21 @@ export default function DependenciesRisksSection({ onNavigate }) {
     isBackendOnline,
     evaluateImpact,
     impactMap,
-    referenceParagraphs
+    referenceParagraphs,
+    navigationTarget,
+    clearNavigationTarget
   } = useProject();
 
-  const [selectedParagraph, setSelectedParagraph] = useState('2100-CALCULATE-PENALTY');
+  const [userSelectedParagraph, setUserSelectedParagraph] = useState(null);
+  const [prevNavTimestamp, setPrevNavTimestamp] = useState(navigationTarget?.timestamp);
+
+  if (navigationTarget?.timestamp !== prevNavTimestamp) {
+    setPrevNavTimestamp(navigationTarget?.timestamp);
+    setUserSelectedParagraph(null);
+  }
+
+  const selectedParagraph = userSelectedParagraph || navigationTarget?.paragraph || '2100-CALCULATE-PENALTY';
+  const setSelectedParagraph = setUserSelectedParagraph;
 
   // Trigger impact assessment when paragraph changes if finding exists
   useEffect(() => {
@@ -107,6 +118,28 @@ export default function DependenciesRisksSection({ onNavigate }) {
 
   return (
     <div className="space-y-5">
+      {/* Return to Modernization Report banner when navigated from report */}
+      {navigationTarget?.from === 'modernization-report' && (
+        <div className="flex items-center justify-between p-3 px-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
+              Modernization Flow
+            </span>
+            <span>Deep dive active: Inspecting routine dependencies & blast radius linked from Modernization Report</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearNavigationTarget();
+              onNavigate('modernization-report');
+            }}
+            className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+          >
+            &larr; Back to Modernization Report
+          </button>
+        </div>
+      )}
+
       {/* Header Banner - White-Primary */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

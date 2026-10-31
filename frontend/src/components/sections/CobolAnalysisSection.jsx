@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
@@ -23,7 +23,9 @@ export default function CobolAnalysisSection({ onNavigate }) {
     report,
     isBackendOnline,
     ingestGitHubFile,
-    isReassessed
+    isReassessed,
+    navigationTarget,
+    clearNavigationTarget
   } = useProject();
 
   // Ingestion Mode Tab: 'GITHUB' | 'ZIP'
@@ -42,11 +44,35 @@ export default function CobolAnalysisSection({ onNavigate }) {
   const [fileCategoryFilter, setFileCategoryFilter] = useState('ALL'); // 'ALL' | 'COBOL' | 'COPYBOOKS' | 'OTHER'
 
   // Viewer state
-  const [selectedParagraphName, setSelectedParagraphName] = useState(null);
-  const [selectedRuleId, setSelectedRuleId] = useState(null);
-  const [highlightedLines, setHighlightedLines] = useState(null);
+  const [userParagraphName, setUserParagraphName] = useState(null);
+  const [userRuleId, setUserRuleId] = useState(null);
+  const [userHighlightedLines, setUserHighlightedLines] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [rightPanelTab, setRightPanelTab] = useState('RULES'); // 'RULES' | 'DATA' | 'STRUCTURE'
+  const [userTab, setUserTab] = useState(null);
+
+  // Synchronize state with navigationTarget timestamp during render
+  const [prevNavTimestamp, setPrevNavTimestamp] = useState(navigationTarget?.timestamp);
+  if (navigationTarget?.timestamp !== prevNavTimestamp) {
+    setPrevNavTimestamp(navigationTarget?.timestamp);
+    setUserParagraphName(null);
+    setUserRuleId(null);
+    setUserHighlightedLines(null);
+    setUserTab(null);
+  }
+
+  const rightPanelTab = userTab || (navigationTarget?.ruleId ? 'RULES' : navigationTarget?.tab) || 'RULES';
+  const setRightPanelTab = setUserTab;
+
+  const selectedRuleId = userRuleId !== null ? userRuleId : (navigationTarget?.ruleId || null);
+  const setSelectedRuleId = setUserRuleId;
+
+  const selectedParagraphName = userParagraphName !== null ? userParagraphName : (navigationTarget?.paragraph || null);
+  const setSelectedParagraphName = setUserParagraphName;
+
+  const highlightedLines = userHighlightedLines !== null 
+    ? userHighlightedLines 
+    : (navigationTarget?.lines || null);
+  const setHighlightedLines = setUserHighlightedLines;
 
   // DYNAMIC FILE-SPECIFIC ANALYSIS: Extract AST, data items, and structure for activeFile
   const fileAnalysis = useMemo(() => {
@@ -230,8 +256,37 @@ export default function CobolAnalysisSection({ onNavigate }) {
     return activeFile.content.split('\n');
   }, [activeFile]);
 
+  // DOM scroll effect when navigation specifies line numbers
+  useEffect(() => {
+    if (navigationTarget?.lines && navigationTarget.lines[0]) {
+      scrollToLine(navigationTarget.lines[0]);
+    }
+  }, [navigationTarget]);
+
   return (
     <div className="space-y-5">
+      {/* Return to Modernization Report banner when navigated from report */}
+      {navigationTarget?.from === 'modernization-report' && (
+        <div className="flex items-center justify-between p-3 px-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
+              Modernization Flow
+            </span>
+            <span>Deep dive active: Inspecting source code & AST evidence linked from Modernization Report</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearNavigationTarget();
+              onNavigate('modernization-report');
+            }}
+            className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+          >
+            &larr; Back to Modernization Report
+          </button>
+        </div>
+      )}
+
       {/* 1. Ingestion Card with Tabbed Modes */}
       <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
