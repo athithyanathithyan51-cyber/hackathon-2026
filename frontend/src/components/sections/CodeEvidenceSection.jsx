@@ -24,7 +24,8 @@ export default function CodeEvidenceSection({
   setIsAnalyzed,
   selectedFunctionId,
   setSelectedFunctionId,
-  onLoadBankingDemo
+  onLoadBankingDemo,
+  isReassessed = false
 }) {
   const [activeFileId, setActiveFileId] = useState(files[0]?.id || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -103,7 +104,7 @@ export default function CodeEvidenceSection({
               Ingestion Pipeline
             </span>
             <Badge variant={isAnalyzed ? 'success' : 'neutral'} size="xs" dot={isAnalyzed}>
-              {isAnalyzed ? 'Initial Analysis Grounded' : 'Awaiting Ingestion'}
+              {isAnalyzed ? (isReassessed ? 'v2.0 Reassessed Baseline' : 'Initial Analysis Grounded') : 'Awaiting Ingestion'}
             </Badge>
           </div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900">
@@ -258,6 +259,7 @@ export default function CodeEvidenceSection({
             <BusinessRuleTable
               rules={BUSINESS_RULE_CANDIDATES}
               onSelectRuleFunction={handleSelectRuleFunction}
+              isReassessed={isReassessed}
             />
           )}
 

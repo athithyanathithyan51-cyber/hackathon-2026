@@ -9,7 +9,9 @@ import {
   ArrowRight, 
   Layers, 
   GitCommit,
-  Sparkles
+  Sparkles,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   BUSINESS_RULE_CANDIDATES, 
@@ -19,6 +21,7 @@ import {
 export default function OverviewSection({ 
   files = [], 
   isAnalyzed = false, 
+  isReassessed = false,
   onNavigate,
   onLoadBankingDemo
 }) {
@@ -31,8 +34,8 @@ export default function OverviewSection({
             <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
               LegacyIQ Core Engine
             </span>
-            <Badge variant={isAnalyzed ? 'success' : 'purple'} size="sm" dot={isAnalyzed}>
-              {isAnalyzed ? 'v1.0 Baseline Analysis Active' : 'Awaiting Code Ingestion'}
+            <Badge variant={isReassessed ? 'danger' : isAnalyzed ? 'success' : 'purple'} size="sm" dot={isAnalyzed}>
+              {isReassessed ? 'v2.0 Reassessed (1 Disputed Rule)' : isAnalyzed ? 'v1.0 Baseline Analysis Active' : 'Awaiting Code Ingestion'}
             </Badge>
             <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300">
               Simulated Demo Mode
@@ -43,7 +46,7 @@ export default function OverviewSection({
             Adaptive Evidence-Driven Legacy Modernization
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            LegacyIQ helps developers rigorously understand legacy applications before refactoring. Ingest Python code to discover implicit business rules, tie findings to line-level evidence, and evaluate modernization blast radius.
+            LegacyIQ helps developers rigorously understand legacy applications before refactoring. Ingest Python code to discover implicit business rules, tie findings to line-level evidence, and continuously update risk ratings when production incidents arrive.
           </p>
 
           <div className="pt-2 flex flex-wrap gap-3">
@@ -54,7 +57,7 @@ export default function OverviewSection({
               iconPosition="right"
               onClick={() => onNavigate('code-evidence')}
             >
-              {isAnalyzed ? 'Inspect Discovered Rules' : 'Start Code Ingestion'}
+              {isReassessed ? 'View v2.0 Rule Findings' : isAnalyzed ? 'Inspect Discovered Rules' : 'Start Code Ingestion'}
             </Button>
             {!isAnalyzed && (
               <Button
@@ -70,12 +73,12 @@ export default function OverviewSection({
               </Button>
             )}
             <Button
-              variant="ghost"
+              variant="subtle"
               size="sm"
               icon={BrainCircuit}
               onClick={() => onNavigate('adaptive-intelligence')}
             >
-              Preview Adaptive Engine
+              {isReassessed ? 'Review v2.0 Comparison' : 'Adaptive Intelligence'}
             </Button>
           </div>
         </div>
@@ -85,12 +88,12 @@ export default function OverviewSection({
       {/* KPI / Metric Grid (Grounded in Actual Analysis State) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Source Files Analyzed"
-          value={isAnalyzed ? '1' : `${files.length}`}
-          subtext={isAnalyzed ? 'penalty_engine.py (16 LOC)' : files.length > 0 ? `${files.length} staged for analysis` : 'No files loaded'}
+          title="Evidence Artifacts"
+          value={isReassessed ? '2' : isAnalyzed ? '1' : `${files.length}`}
+          subtext={isReassessed ? 'AST Code + Incident INC-101' : isAnalyzed ? 'penalty_engine.py (16 LOC)' : files.length > 0 ? `${files.length} staged for analysis` : 'No files loaded'}
           icon={FileCode2}
           accentColor="blue"
-          badge={isAnalyzed ? 'Analyzed' : 'Staged'}
+          badge={isReassessed ? 'Multi-Source' : isAnalyzed ? 'Analyzed' : 'Staged'}
         />
         <StatCard
           title="Functions Discovered"
@@ -98,23 +101,23 @@ export default function OverviewSection({
           subtext={isAnalyzed ? 'AST isolated routines' : 'Run analysis to extract'}
           icon={Layers}
           accentColor="emerald"
-          badge={isAnalyzed ? 'v1.0' : 'Pending'}
+          badge={isReassessed ? 'v2.0' : isAnalyzed ? 'v1.0' : 'Pending'}
         />
         <StatCard
           title="Business Rules"
           value={isAnalyzed ? `${BUSINESS_RULE_CANDIDATES.length}` : '—'}
-          subtext={isAnalyzed ? 'Minimum balance & overdraft' : 'Awaiting AST parsing'}
+          subtext={isReassessed ? '1 rule flagged with contradiction' : isAnalyzed ? 'Minimum balance & overdraft' : 'Awaiting AST parsing'}
           icon={ShieldCheck}
-          accentColor="purple"
-          badge={isAnalyzed ? 'Grounded' : 'Pending'}
+          accentColor={isReassessed ? 'rose' : 'purple'}
+          badge={isReassessed ? 'Dispute Active' : isAnalyzed ? 'Grounded' : 'Pending'}
         />
         <StatCard
-          title="Dependencies Identified"
-          value={isAnalyzed ? '1' : '—'}
-          subtext={isAnalyzed ? 'process_payment → calculate_penalty' : 'Awaiting call graph'}
-          icon={GitCommit}
-          accentColor="amber"
-          badge={isAnalyzed ? 'Call Graph' : 'Pending'}
+          title="Modernization Risk"
+          value={isReassessed ? 'High' : isAnalyzed ? 'Medium' : '—'}
+          subtext={isReassessed ? 'Exemption policy divergence' : isAnalyzed ? 'Deterministic transaction fee' : 'Awaiting analysis'}
+          icon={isReassessed ? ShieldAlert : GitCommit}
+          accentColor={isReassessed ? 'rose' : 'amber'}
+          badge={isReassessed ? 'Elevated' : isAnalyzed ? 'Baseline' : 'Pending'}
         />
       </div>
 
@@ -123,8 +126,8 @@ export default function OverviewSection({
         title="Active Modernization Project: Retail Banking Core"
         subtitle="Sample legacy banking application demonstrating the 3-stage LegacyIQ modernization workflow"
         badge={
-          <Badge variant={isAnalyzed ? 'success' : 'purple'} size="xs" dot={isAnalyzed}>
-            {isAnalyzed ? 'Analysis Version: v1.0' : 'Ready for Ingestion'}
+          <Badge variant={isReassessed ? 'danger' : isAnalyzed ? 'success' : 'purple'} size="xs" dot={isAnalyzed}>
+            {isReassessed ? 'Analysis Version: v2.0 (Reassessed)' : isAnalyzed ? 'Analysis Version: v1.0' : 'Ready for Ingestion'}
           </Badge>
         }
         actions={
@@ -133,9 +136,9 @@ export default function OverviewSection({
             size="xs"
             icon={ArrowRight}
             iconPosition="right"
-            onClick={() => onNavigate('code-evidence')}
+            onClick={() => onNavigate(isReassessed ? 'adaptive-intelligence' : 'code-evidence')}
           >
-            {isAnalyzed ? 'View Findings' : 'Open Ingestion Studio'}
+            {isReassessed ? 'Compare v1.0 vs v2.0' : isAnalyzed ? 'View Findings' : 'Open Ingestion Studio'}
           </Button>
         }
       >
@@ -155,13 +158,13 @@ export default function OverviewSection({
 
             <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                Analysis State & Version
+                Active Version Snapshot
               </span>
               <div className="font-semibold text-slate-900 flex items-center gap-2">
-                {isAnalyzed ? 'v1.0 (Initial Code Ingestion)' : 'v0.0 (Unanalyzed)'}
+                {isReassessed ? 'v2.0 (Adaptive Reassessment)' : isAnalyzed ? 'v1.0 (Initial Code Ingestion)' : 'v0.0 (Unanalyzed)'}
               </div>
               <div className="text-[11px] text-slate-500">
-                {isAnalyzed ? 'Grounded in static Python AST' : 'Click "Analyze Application" to execute'}
+                {isReassessed ? 'Reassessed with Production Incident INC-101' : isAnalyzed ? 'Grounded in static Python AST' : 'Click "Analyze Application" to execute'}
               </div>
             </div>
 
@@ -170,30 +173,49 @@ export default function OverviewSection({
                 Evidence Maturity
               </span>
               <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Source AST Active
+                <span className={`w-2 h-2 rounded-full ${isReassessed ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                {isReassessed ? 'AST + Incident Stream Active' : 'Source AST Active'}
               </div>
               <div className="text-[11px] text-slate-500">
-                Incident & ticket stream pending Phase 3
+                {isReassessed ? 'Policy docs & SQL schema scheduled' : 'Incident & ticket stream pending Phase 3'}
               </div>
             </div>
           </div>
 
           {/* If analyzed, show preview of discovered business rules */}
           {isAnalyzed && (
-            <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100 space-y-2 text-xs">
-              <div className="flex items-center justify-between font-semibold text-blue-950">
-                <span>Key Business Rule Discovered in Initial Analysis:</span>
-                <span className="font-mono text-[11px] text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded">
-                  Rule BR-001 (Line 2)
+            <div className={`p-4 rounded-xl border space-y-2 text-xs ${
+              isReassessed 
+                ? 'bg-amber-50/50 border-amber-200' 
+                : 'bg-blue-50/50 border-blue-100'
+            }`}>
+              <div className="flex items-center justify-between font-semibold">
+                <span className={isReassessed ? 'text-amber-950 flex items-center gap-1.5' : 'text-blue-950'}>
+                  {isReassessed && <AlertTriangle className="w-4 h-4 text-amber-600" />}
+                  {isReassessed ? 'Reassessed Rule BR-001 (Contradiction Flagged):' : 'Key Business Rule Discovered in Initial Analysis:'}
+                </span>
+                <span className={`font-mono text-[11px] px-2 py-0.5 rounded ${
+                  isReassessed 
+                    ? 'text-rose-700 bg-rose-100/70 font-bold' 
+                    : 'text-blue-700 bg-blue-100/70'
+                }`}>
+                  {isReassessed ? 'BR-001 • Disputed in v2.0' : 'Rule BR-001 (Line 2)'}
                 </span>
               </div>
               <p className="text-slate-700 leading-relaxed">
-                Accounts with balances below <strong>₹1,000</strong> are automatically assessed a <strong>₹50 penalty</strong> in <code className="text-blue-900 bg-blue-100/50 px-1 py-0.5 rounded font-mono">calculate_penalty(balance)</code>.
+                {isReassessed ? (
+                  <span>
+                    Initial rule charged ₹50 for balance &lt; 1,000. <strong>Incident INC-101 indicates customers with approved payment extensions should be exempt.</strong> Modernization verdict changed from "Direct Refactor" to "Investigate Policy".
+                  </span>
+                ) : (
+                  <span>
+                    Accounts with balances below <strong>₹1,000</strong> are automatically assessed a <strong>₹50 penalty</strong> in <code className="text-blue-900 bg-blue-100/50 px-1 py-0.5 rounded font-mono">calculate_penalty(balance)</code>.
+                  </span>
+                )}
               </p>
               <div className="pt-1 flex items-center gap-3 text-[11px] text-slate-500">
                 <span>• Observed fact: <code className="text-slate-700">if balance &lt; 1000: return 50</code></span>
-                <span>• Inferred rule: Minimum balance maintenance policy</span>
+                <span>• Certainty score: <strong className={isReassessed ? 'text-rose-700' : 'text-slate-700'}>{isReassessed ? '64% (Requires Validation)' : '94%'}</strong></span>
               </div>
             </div>
           )}
@@ -205,7 +227,7 @@ export default function OverviewSection({
         <Card
           title="Innovation 1"
           subtitle="Adaptive Evidence Intelligence"
-          badge={<Badge variant="purple">Phase 3</Badge>}
+          badge={<Badge variant={isReassessed ? 'success' : 'purple'}>{isReassessed ? 'v2.0 Active' : 'Phase 3'}</Badge>}
           className="hover:border-blue-300 transition-all"
         >
           <div className="space-y-3">
@@ -219,14 +241,14 @@ export default function OverviewSection({
             </ul>
             <div className="pt-2">
               <Button
-                variant="subtle"
+                variant={isReassessed ? 'primary' : 'subtle'}
                 size="xs"
                 className="w-full justify-between"
                 icon={ArrowRight}
                 iconPosition="right"
                 onClick={() => onNavigate('adaptive-intelligence')}
               >
-                Inspect Adaptive Engine
+                {isReassessed ? 'Inspect v1 vs v2 Comparison' : 'Inspect Adaptive Engine'}
               </Button>
             </div>
           </div>
