@@ -1,122 +1,45 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import DashboardLayout from './components/layout/DashboardLayout';
+import OverviewSection from './components/sections/OverviewSection';
+import CodeEvidenceSection from './components/sections/CodeEvidenceSection';
+import AdaptiveIntelligenceSection from './components/sections/AdaptiveIntelligenceSection';
+import DecisionCenterSection from './components/sections/DecisionCenterSection';
+import ImpactSimulatorSection from './components/sections/ImpactSimulatorSection';
+import AnalysisHistorySection from './components/sections/AnalysisHistorySection';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [activeSection, setActiveSection] = useState('overview');
+
+  const handleResetDemo = () => {
+    setActiveSection('overview');
+  };
+
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'overview':
+        return <OverviewSection onNavigate={setActiveSection} />;
+      case 'code-evidence':
+        return <CodeEvidenceSection onNavigate={setActiveSection} />;
+      case 'adaptive-intelligence':
+        return <AdaptiveIntelligenceSection onNavigate={setActiveSection} />;
+      case 'decision-center':
+        return <DecisionCenterSection onNavigate={setActiveSection} />;
+      case 'impact-simulator':
+        return <ImpactSimulatorSection onNavigate={setActiveSection} />;
+      case 'analysis-history':
+        return <AnalysisHistorySection onNavigate={setActiveSection} />;
+      default:
+        return <OverviewSection onNavigate={setActiveSection} />;
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <DashboardLayout
+      activeSection={activeSection}
+      onSelectSection={setActiveSection}
+      onResetDemo={handleResetDemo}
+    >
+      {renderActiveSection()}
+    </DashboardLayout>
+  );
 }
-
-export default App
