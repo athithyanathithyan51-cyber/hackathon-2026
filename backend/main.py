@@ -90,24 +90,6 @@ def _risk_for(project, version):
     return assess_risk(version.finding, evidence_matches=version.evidence_matches, external_calls=external)
 
 
-def _java_name(cobol_name):
-    parts = [part.lower() for part in cobol_name.replace("_", "-").split("-") if part]
-    return parts[0] + "".join(part.capitalize() for part in parts[1:]) if parts else "rule"
-
-
-def _java_skeleton(finding):
-    """A documented Java method stub. The rule is not translated until a business owner validates it."""
-    name = _java_name(finding.function_name)
-    lines = [
-        f"// Source: {finding.source_file}:{finding.start_line} (paragraph {finding.function_name})",
-        f"// COBOL condition: {finding.observed_condition}",
-        "// TODO: translate after business sign-off; do not change behaviour silently.",
-        f"public void {name}() {{",
-        "}",
-    ]
-    return "\n".join(lines) + "\n"
-
-
 def _recommend(risk, matches):
     """Suggest an action. Always a suggestion for human review, never applied automatically."""
     if risk.risk_category.value == "CRITICAL" or any(
@@ -326,7 +308,6 @@ def generate_plan(project_id: str):
                 "model": interpretation.model_used,
                 "is_fallback": interpretation.is_fallback,
             },
-            "java_skeleton": _java_skeleton(candidate),
         })
 
     def where(item):

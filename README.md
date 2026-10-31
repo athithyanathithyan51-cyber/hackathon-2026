@@ -30,9 +30,9 @@ Build an AI system that reads a legacy application's evidence (source code, data
 
 Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown project or finding, `422` invalid body or Python that does not parse.
 
-**Status:** all endpoints below are implemented and tested. Not built yet: the `functions` listing and the `report` endpoint. Java output is a documented stub; full translation needs an LLM key.
+**Status:** all endpoints below are implemented and tested. Not built yet: the `functions` listing and the `report` endpoint. Scope is modernization planning and risk only: no code conversion.
 
-**Supported inputs:** Python (`.py`) and COBOL (`.cbl`, `.cob`). Copybooks (`.cpy`) and other files are stored as evidence only.
+**Supported inputs:** Python (`.py`) and COBOL (`.cbl`, `.cob`). Analysis only; no code is converted or rewritten. Copybooks (`.cpy`) and other files are stored as evidence only.
 
 **Rules for every endpoint**
 - Uploaded code is parsed, never executed.
@@ -51,7 +51,7 @@ Base path `/api`. JSON in and out. Status codes: `200` success, `404` unknown pr
 | GET | `/api/projects/{id}/findings` | - | `[{ "id", "function", "file", "start_line", "version", "description", "evidence_status", "risk_score", "risk_category", "recommendation", "evidence": [{ "source", "match", "explanation" }] }]` |
 | GET | `/api/projects/{id}/findings/{fid}/history` | - | `[{ "version", "timestamp", "change_reason", "evidence_status", "risk_score", "risk_category" }]` |
 | POST | `/api/projects/{id}/impact` | `{ "finding_id" }` | `{ "finding_id", "risk_score", "risk_category", "risk_reasons": [str], "affected": ["<file>:<function>"], "regression_tests": [{ "input", "expected", "note" }], "recommendation" }` |
-| POST | `/api/projects/{id}/plan` | - | `{ "summary": { "rules", "blocked", "investigate" }, "phases": [{ "name", "actions": [str] }], "findings": [{ "id", "function", "file", "start_line", "condition", "risk_category", "risk_score", "blocked", "recommendation", "interpretation": { "business_explanation", "questions", "model", "is_fallback" }, "java_skeleton" }] }` |
+| POST | `/api/projects/{id}/plan` | - | `{ "summary": { "rules", "blocked", "investigate" }, "phases": [{ "name", "actions": [str] }], "findings": [{ "id", "function", "file", "start_line", "condition", "risk_category", "risk_score", "blocked", "recommendation", "interpretation": { "business_explanation", "questions", "model", "is_fallback" } }] }` |
 | GET | `/api/projects/{id}/overview` | - | `{ "files_analyzed", "rule_candidates", "risks", "evidence_conflicts" }` |
 
 **Enums**
@@ -105,4 +105,4 @@ Project: **LegacyIQ**, an evidence-driven legacy application modernization assis
 7. Keep previous findings when new evidence arrives.
 8. A human reviews every consequential modernization decision.
 
-**Scope for the hackathon:** Python only. Java, C++ and other parsers, automatic code rewriting, runtime monitoring, and multi-agent systems are out of scope until the core workflow works.
+**Scope for the hackathon:** modernization planning and risk analysis for Python and COBOL. Code conversion, automatic rewriting, runtime monitoring and multi-agent systems are out of scope.
