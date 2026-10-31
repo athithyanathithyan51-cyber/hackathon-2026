@@ -18,7 +18,7 @@ export default function ModernizationReportSection({ onNavigate }) {
     overview
   } = useProject();
 
-  const [activeStageId, setActiveStageId] = useState(1);
+  const [selectedNodeId, setSelectedNodeId] = useState('evidence');
   const [copiedId, setCopiedId] = useState(null);
 
   const handleCopyCode = (id, text) => {
@@ -27,7 +27,7 @@ export default function ModernizationReportSection({ onNavigate }) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Derive component 4R strategies
+  // Derive component 4R strategies from live findings or reference
   const componentStrategies = useMemo(() => {
     if (findings && findings.length > 0) {
       return findings.map((f, idx) => {
@@ -56,20 +56,19 @@ export default function ModernizationReportSection({ onNavigate }) {
       });
     }
 
-    // Default reference model
     return [
       {
         id: 'COMP-01',
         paragraph: '2100-CALCULATE-PENALTY',
         ruleId: 'BR-001',
         lines: 'Lines 37–44',
-        sourceFile: activeFile?.name || 'PENALTY.cbl',
+        sourceFile: 'PENALTY.cbl',
         strategy: isReassessed ? 'RETAIN' : 'REFACTOR',
         strategyBadge: isReassessed ? 'warning' : 'info',
         verdict: isReassessed ? 'REVIEW REQUIRED (Gated by INC-101)' : 'READY FOR REFACTOR',
         targetArtifact: 'PenaltyCalculationService.java (@Service)',
         recommendation: isReassessed
-          ? 'Retain current routine in place or halt automated conversion until retail banking domain owners verify the payment extension exemption policy.'
+          ? 'Retain routine in place or halt automated conversion until retail banking domain owners verify the payment extension exemption policy.'
           : 'Refactor into Java 21 Spring Boot service utilizing immutable AccountRecord and BigDecimal arithmetic.',
         risk: isReassessed ? 'Critical Risk (Disputed Behavior)' : 'Medium Risk'
       },
@@ -78,7 +77,7 @@ export default function ModernizationReportSection({ onNavigate }) {
         paragraph: '2000-PROCESS-PAYMENT',
         ruleId: 'BR-002',
         lines: 'Lines 31–35',
-        sourceFile: activeFile?.name || 'PENALTY.cbl',
+        sourceFile: 'PENALTY.cbl',
         strategy: 'REFACTOR',
         strategyBadge: 'info',
         verdict: 'REVIEW TRANSACTION CONTRACT',
@@ -91,7 +90,7 @@ export default function ModernizationReportSection({ onNavigate }) {
         paragraph: '1000-CHECK-ACCOUNT-STATUS',
         ruleId: 'BR-003',
         lines: 'Lines 24–29',
-        sourceFile: activeFile?.name || 'PENALTY.cbl',
+        sourceFile: 'PENALTY.cbl',
         strategy: 'RETAIN',
         strategyBadge: 'neutral',
         verdict: 'MAP TO ENUM',
@@ -135,7 +134,7 @@ export default function ModernizationReportSection({ onNavigate }) {
     ];
   }, [report, plan]);
 
-  // Live regression tests from impact map
+  // Live regression tests
   const liveRegressionTests = useMemo(() => {
     const tests = [];
     Object.values(impactMap).forEach(imp => {
@@ -155,8 +154,8 @@ export default function ModernizationReportSection({ onNavigate }) {
     return tests;
   }, [impactMap]);
 
-  // 8 Flow Stages Definition
-  const flowStages = useMemo(() => {
+  // 10 Flow Nodes with Dual Explanation Pattern (Technical Label + Plain-English)
+  const flowNodes = useMemo(() => {
     const filesCount = stagedFiles.length || 1;
     const rulesCount = findings.length > 0 ? findings.length : 2;
     const hasConflicts = isReassessed || (overview?.evidence_conflicts && overview.evidence_conflicts > 0);
@@ -164,90 +163,129 @@ export default function ModernizationReportSection({ onNavigate }) {
 
     return [
       {
-        id: 1,
-        title: 'Source Discovery',
-        subtitle: 'Inventory & Format Verification',
-        metric: `${filesCount} File(s) Staged`,
+        id: 'project',
+        step: '1',
+        techLabel: 'Source Project Repository',
+        plainEnglish: 'The collection of COBOL programs and copybooks submitted for modernization.',
         status: filesCount > 0 ? 'Completed' : 'Pending',
-        statusVariant: filesCount > 0 ? 'success' : 'neutral',
-        description: 'Discovers COBOL source programs, copybooks, and auxiliary scripts. Validates fixed 80-column formatting.'
+        statusColor: 'emerald',
+        badge: `${filesCount} Files Staged`,
+        summaryText: `Analyzed repository files including COBOL programs (.cbl), copybook records (.cpy), and scripts.`
       },
       {
-        id: 2,
-        title: 'Program Understanding',
-        subtitle: 'AST Parsing & Call Hierarchy',
-        metric: report?.analysis?.paragraphs?.length ? `${report.analysis.paragraphs.length} Paragraphs` : '4 Paragraphs Mapped',
+        id: 'discovery',
+        step: '2',
+        techLabel: 'Source Discovery & Validation',
+        plainEnglish: 'Checks file formats, line counts, and ensures the code is readable COBOL.',
         status: 'Completed',
-        statusVariant: 'success',
-        description: 'Parses IDENTIFICATION, DATA, and PROCEDURE divisions into abstract syntax trees. Discovers PERFORM and CALL routines.'
+        statusColor: 'emerald',
+        badge: 'ANSI COBOL-85 Verified',
+        summaryText: 'Verified standard fixed 80-column formatting, IDENTIFICATION DIVISION headers, and data layouts.'
       },
       {
-        id: 3,
-        title: 'Rule Extraction',
-        subtitle: 'Conditions & Computations',
-        metric: `${rulesCount} Business Rules`,
-        status: rulesCount > 0 ? 'Completed' : 'Pending',
-        statusVariant: rulesCount > 0 ? 'success' : 'neutral',
-        description: 'Isolates conditional statements (IF, WHEN, COMPUTE) and formulates verifiable business logic candidates with source citations.'
+        id: 'understanding',
+        step: '3',
+        techLabel: 'Program Understanding & AST Hierarchy',
+        plainEnglish: 'Breaks down the COBOL code into a structured map of routines and subprogram calls.',
+        status: 'Completed',
+        statusColor: 'emerald',
+        badge: 'Routines Mapped',
+        summaryText: 'Parsed PROCEDURE DIVISION routines and mapped internal PERFORM execution paths.'
       },
       {
-        id: 4,
-        title: 'Risk Assessment',
-        subtitle: 'Blast Radius & Heuristics',
-        metric: hasHighRisks ? 'High Risk Identified' : 'Medium / Low Risk',
+        id: 'extraction',
+        step: '4',
+        techLabel: 'Business Rule Extraction',
+        plainEnglish: 'Pulls out the actual business logic (such as fees, interest, or status checks) from IF/WHEN conditions.',
+        status: 'Completed',
+        statusColor: 'teal',
+        badge: `${rulesCount} Rules Discovered`,
+        summaryText: 'Extracted rule candidates with exact line citations and input/output variables.'
+      },
+      {
+        id: 'risk',
+        step: '5',
+        techLabel: 'Dependency & Blast Radius Analysis',
+        plainEnglish: 'Checks which other parts of the banking system could break if this code is modified.',
         status: hasHighRisks ? 'Needs Review' : 'Completed',
-        statusVariant: hasHighRisks ? 'warning' : 'success',
-        description: 'Evaluates financial computation severity, global variable side-effects, and external routine coupling.'
+        statusColor: hasHighRisks ? 'amber' : 'emerald',
+        badge: hasHighRisks ? 'High Risk Flagged' : 'Low/Medium Risk',
+        summaryText: 'Calculated global variable mutations (WS-BALANCE) and identified caller blast radii.'
       },
       {
-        id: 5,
-        title: 'Evidence Verification',
-        subtitle: 'Operational Ticket Corroboration',
-        metric: hasConflicts ? 'INC-101 Disputed' : 'Baseline Verified',
+        id: 'evidence',
+        step: '6',
+        isDecisionGate: true,
+        techLabel: 'Evidence Verification & Governance Gate',
+        plainEnglish: 'Compares the code against real production incidents to check if the code matches what the bank actually intends.',
         status: hasConflicts ? 'Blocked' : 'Needs Review',
-        statusVariant: hasConflicts ? 'danger' : 'warning',
-        description: 'Reconciles code findings against production incident stream (INC-101) and specification documents to uncover logic blindspots.'
+        statusColor: hasConflicts ? 'rose' : 'amber',
+        badge: hasConflicts ? 'INC-101 Disputed' : 'Baseline Verified',
+        conflictDetails: hasConflicts ? {
+          ticket: 'INC-101 (Production Billing Dispute)',
+          description: 'Deposit accounts with approved customer payment extensions were incorrectly charged penalty fees because the PROCEDURE DIVISION omits checking WS-PAYMENT-EXT-FLAG.',
+          actionNeeded: 'Requires retail credit policy owner validation before modernization approval can be granted.'
+        } : null,
+        summaryText: hasConflicts 
+          ? 'INC-101 detected a logic conflict: Code omits customer payment extension waiver logic.'
+          : 'Code logic verified against observed baseline specifications.'
       },
       {
-        id: 6,
-        title: 'Modernization Strategy',
-        subtitle: '4R Component Allocation',
-        metric: hasConflicts ? 'Review Required' : '4R Formulated',
+        id: 'decision',
+        step: '7',
+        is4RBranch: true,
+        techLabel: 'Modernization Decision (4R Framework)',
+        plainEnglish: 'Decides whether each part should be kept as-is, refactored into Java, replaced with a library, or removed.',
         status: hasConflicts ? 'Needs Review' : 'Completed',
-        statusVariant: hasConflicts ? 'warning' : 'success',
-        description: 'Assigns Retain, Refactor, Replace, or Remove strategies per paragraph based on evidence gating and risk score.'
+        statusColor: hasConflicts ? 'amber' : 'emerald',
+        badge: hasConflicts ? 'Review Required' : '4R Formulated',
+        summaryText: 'Assigned Retain, Refactor, Replace, or Remove strategies per routine based on risk and evidence.'
       },
       {
-        id: 7,
-        title: 'Migration Planning',
-        subtitle: 'Dependency-Ordered Sequencing',
-        metric: hasConflicts ? 'Execution Locked' : `${migrationPhases.length} Phases`,
+        id: 'plan',
+        step: '8',
+        techLabel: 'Java 21 + Spring Boot 3.x Migration Plan',
+        plainEnglish: 'Creates an ordered step-by-step roadmap to build the new Java application without breaking existing banking operations.',
         status: hasConflicts ? 'Blocked' : 'Completed',
-        statusVariant: hasConflicts ? 'danger' : 'success',
-        description: 'Constructs phased roadmap towards Java 21 LTS and Spring Boot 3.3.x clean hexagonal architecture.'
+        statusColor: hasConflicts ? 'rose' : 'emerald',
+        badge: hasConflicts ? 'Execution Gated' : `${migrationPhases.length} Phases`,
+        summaryText: 'Structured phased migration into hexagonal domain services, records, and repositories.'
       },
       {
-        id: 8,
-        title: 'Regression Verification',
-        subtitle: 'Characterization Test Suites',
-        metric: `${liveRegressionTests.length || REGRESSION_TEST_SCENARIOS.length} Scenarios`,
+        id: 'testing',
+        step: '9',
+        techLabel: 'Characterization Regression Testing',
+        plainEnglish: 'Runs tests on boundary numbers (like $1,000 balance) to prove the Java code behaves identically to the COBOL code.',
         status: 'Needs Review',
-        statusVariant: 'warning',
-        description: 'Synthesizes golden-master boundary tests (JUnit 5) to guarantee zero functional divergence during transition.'
+        statusColor: 'amber',
+        badge: `${liveRegressionTests.length || REGRESSION_TEST_SCENARIOS.length} Scenarios`,
+        summaryText: 'Synthesized golden-master JUnit 5 assertion suites for boundary values.'
+      },
+      {
+        id: 'verified',
+        step: '10',
+        techLabel: 'Verified Modernization Outcome',
+        plainEnglish: 'The final sign-off confirming that the modernized system is correct, safe, and ready for production.',
+        status: hasConflicts ? 'Pending Validation' : 'Ready for Sign-Off',
+        statusColor: hasConflicts ? 'slate' : 'emerald',
+        badge: hasConflicts ? 'Locked' : 'Audit Ready',
+        summaryText: hasConflicts
+          ? 'Modernization approval is locked until retail banking domain owners resolve incident INC-101.'
+          : 'Ready for architecture governance board review.'
       }
     ];
-  }, [stagedFiles, findings, isReassessed, overview, report, migrationPhases, liveRegressionTests]);
+  }, [stagedFiles, findings, isReassessed, overview, migrationPhases, liveRegressionTests]);
 
-  const activeStage = flowStages.find(s => s.id === activeStageId) || flowStages[0];
+  const activeNode = flowNodes.find(n => n.id === selectedNodeId) || flowNodes[5];
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Banner - White-Primary Design System */}
+      {/* 1. Header Banner */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
-              Interactive Modernization Journey
+              Visual Modernization Journey
             </span>
             <Badge variant={isBackendOnline ? 'success' : 'neutral'} size="xs" dot>
               {isBackendOnline ? 'Backend Engine Connected' : 'Offline Reference Model'}
@@ -257,10 +295,10 @@ export default function ModernizationReportSection({ onNavigate }) {
             </Badge>
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-            Interactive Modernization Roadmap & Governance Gate
+            End-to-End Modernization Flow & Governance Diagram
           </h2>
           <p className="text-xs text-slate-600 max-w-3xl mt-0.5">
-            Step through the 8-stage modernization journey. Inspect evidence-backed facts, blast-radius dependencies, unresolved incident conflicts, and characterization test specifications.
+            Designed for software architects, engineering leads, and business domain owners. Follow the journey from legacy COBOL code discovery to evidence-gated Java 21 migration.
           </p>
         </div>
 
@@ -275,354 +313,382 @@ export default function ModernizationReportSection({ onNavigate }) {
         </div>
       </div>
 
-      {/* 2. Top Summary KPI Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* 2. Top Summary Metrics Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Files Analyzed</span>
-          <div className="font-bold text-slate-900 text-base">
-            {overview?.files_analyzed ?? stagedFiles.length}
+          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Source Scope</span>
+          <div className="font-bold text-slate-900 text-sm">
+            {overview?.files_analyzed ?? stagedFiles.length} File(s)
           </div>
           <div className="text-[11px] text-slate-500 font-mono truncate">{activeFile?.name || 'PENALTY.cbl'}</div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
           <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Rules Discovered</span>
-          <div className="font-bold text-slate-900 text-base">
-            {overview?.rule_candidates ?? (findings.length > 0 ? findings.length : 2)}
+          <div className="font-bold text-slate-900 text-sm">
+            {overview?.rule_candidates ?? (findings.length > 0 ? findings.length : 2)} Rules
           </div>
-          <div className="text-[11px] text-slate-500">AST-grounded logic</div>
+          <div className="text-[11px] text-slate-500">AST Conditionals</div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Risks Requiring Attention</span>
-          <div className={`font-bold text-base ${isReassessed || (overview?.risks && overview.risks > 0) ? 'text-amber-700' : 'text-slate-900'}`}>
-            {overview?.risks ?? (isReassessed ? 1 : 0)}
+          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Governance Gate</span>
+          <div className={`font-bold text-sm ${isReassessed ? 'text-rose-700' : 'text-emerald-700'}`}>
+            {isReassessed ? 'INC-101 Conflict' : 'Baseline Verified'}
           </div>
-          <div className="text-[11px] text-slate-500">Heuristic assessment</div>
+          <div className="text-[11px] text-slate-500">{isReassessed ? 'Payment waiver dispute' : 'Zero unhandled conflicts'}</div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Validation Requirements</span>
-          <div className={`font-bold text-base ${isReassessed ? 'text-rose-700' : 'text-emerald-700'}`}>
-            {isReassessed ? '1 Incident Gate' : 'Verified Baseline'}
-          </div>
-          <div className="text-[11px] text-slate-500">{isReassessed ? 'INC-101 Waiver Conflict' : 'No open blockers'}</div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 col-span-2 sm:col-span-1">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Migration Phases</span>
-          <div className="font-bold text-blue-700 text-base">
-            {migrationPhases.length} Phases
-          </div>
-          <div className="text-[11px] text-slate-500">Java 21 Architecture</div>
+          <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Target Architecture</span>
+          <div className="font-bold text-blue-700 text-sm">Java 21 + Spring Boot</div>
+          <div className="text-[11px] text-slate-500">Clean Domain Core</div>
         </div>
       </div>
 
-      {/* 3. INTERACTIVE 8-STAGE VISUAL ROADMAP FLOW */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+      {/* 3. THE INTUITIVE VISUAL MODERNIZATION FLOW DIAGRAM */}
+      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">
-              Modernization Pipeline Flow (Stages 1 – 8)
+              Interactive Modernization Flow Diagram
             </h3>
             <p className="text-xs text-slate-500">
-              Click any stage node to inspect its evidence facts, risks, and Java 21 modernization artifacts.
+              Click any stage or decision diamond to inspect detailed evidence, risks, and Java 21 specifications.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono">
-            <span className="flex items-center gap-1 text-emerald-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" /> Completed
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
+            <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Completed
             </span>
-            <span className="flex items-center gap-1 text-amber-700">
-              <span className="w-2 h-2 rounded-full bg-amber-500" /> Needs Review
+            <span className="flex items-center gap-1 text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500" /> Verified
             </span>
-            <span className="flex items-center gap-1 text-rose-700">
-              <span className="w-2 h-2 rounded-full bg-rose-500" /> Blocked
+            <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Needs Review
+            </span>
+            <span className="flex items-center gap-1 text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Blocked
             </span>
           </div>
         </div>
 
-        {/* Desktop Horizontal / Responsive Grid Roadmap */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
-          {flowStages.map((stage, idx) => {
-            const isSelected = activeStageId === stage.id;
-            return (
-              <button
-                key={stage.id}
-                type="button"
-                onClick={() => setActiveStageId(stage.id)}
-                className={`relative text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between min-h-[110px] ${
-                  isSelected
-                    ? 'bg-blue-50/70 border-blue-500 shadow-xs ring-2 ring-blue-500/20'
-                    : 'bg-white hover:bg-slate-50/80 border-slate-200'
-                }`}
-              >
-                {/* Connecting arrow indicator for sequence */}
-                {idx < flowStages.length - 1 && (
-                  <div className="hidden lg:block absolute -right-2 top-1/2 -translate-y-1/2 text-slate-300 z-10 text-[10px] font-bold pointer-events-none">
-                    &rarr;
-                  </div>
-                )}
+        {/* Visual Pipeline Flow Container */}
+        <div className="space-y-4">
+          {/* STAGE ROW 1: Discovery to Understanding (Steps 1 to 5) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 relative">
+            {flowNodes.slice(0, 5).map((node) => {
+              const isSelected = selectedNodeId === node.id;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => setSelectedNodeId(node.id)}
+                  className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-blue-50/70 border-blue-500 shadow-xs ring-2 ring-blue-500/20'
+                      : 'bg-white hover:bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] font-mono ${
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {node.step}
+                      </span>
+                      <span className={`text-[10px] font-semibold font-mono px-1.5 py-0.2 rounded border ${
+                        node.statusColor === 'emerald'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : node.statusColor === 'teal'
+                          ? 'bg-teal-50 text-teal-800 border-teal-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}>
+                        {node.status}
+                      </span>
+                    </div>
 
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] font-mono shrink-0 ${
-                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
-                    }`}>
-                      {stage.id}
-                    </span>
-                    <Badge variant={stage.statusVariant} size="xs" dot>
-                      {stage.status}
-                    </Badge>
+                    <h4 className="font-bold text-xs text-slate-900 leading-snug">
+                      {node.techLabel}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                      {node.plainEnglish}
+                    </p>
                   </div>
-                  <div className={`font-semibold text-xs leading-snug line-clamp-2 ${
-                    isSelected ? 'text-blue-900' : 'text-slate-900'
+
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] font-mono text-slate-600 font-medium">
+                    {node.badge}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* CONNECTOR ARROW TO DECISION GATE */}
+          <div className="flex justify-center my-1 text-slate-400 font-bold text-sm">
+            &darr;
+          </div>
+
+          {/* DECISION GATE: EVIDENCE VERIFICATION (STEP 6) */}
+          <div className="p-4 rounded-xl border-2 transition-all bg-white relative max-w-4xl mx-auto shadow-xs">
+            <button
+              type="button"
+              onClick={() => setSelectedNodeId('evidence')}
+              className={`w-full text-left p-3 rounded-lg border cursor-pointer transition-all ${
+                selectedNodeId === 'evidence'
+                  ? 'ring-2 ring-blue-500/20 border-blue-400'
+                  : 'border-slate-200'
+              } ${
+                isReassessed ? 'bg-rose-50/70 border-rose-300' : 'bg-amber-50/50 border-amber-300'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs font-mono text-white ${
+                    isReassessed ? 'bg-rose-600' : 'bg-amber-600'
                   }`}>
-                    {stage.title}
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100/80 mt-1">
-                  <span className="font-mono text-[10px] text-slate-600 font-medium block truncate">
-                    {stage.metric}
+                    6
                   </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. ACTIVE STAGE DEEP-DIVE INSPECTION PANEL */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Stage Header Bar */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-sm font-mono shadow-xs shrink-0">
-              {activeStage.id}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">{activeStage.title}</h3>
-                <Badge variant={activeStage.statusVariant} size="xs" dot>
-                  {activeStage.status}
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-600">{activeStage.subtitle} — {activeStage.description}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-slate-500 font-mono">
-              Stage {activeStage.id} of 8
-            </span>
-            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-              <button
-                type="button"
-                onClick={() => setActiveStageId(prev => Math.max(1, prev - 1))}
-                disabled={activeStageId === 1}
-                className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-              >
-                &larr; Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveStageId(prev => Math.min(8, prev + 1))}
-                disabled={activeStageId === 8}
-                className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30 border-l border-slate-200 cursor-pointer"
-              >
-                Next &rarr;
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Stage Body Content Switcher */}
-        <div className="p-5">
-          {/* STAGE 1: SOURCE DISCOVERY */}
-          {activeStageId === 1 && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Active Source File</span>
-                  <div className="font-mono font-bold text-slate-900 text-sm">{activeFile?.name || 'PENALTY.cbl'}</div>
-                  <div className="text-[11px] text-slate-500">{activeFile?.loc || 44} lines • {activeFile?.size || '1.8 KB'}</div>
-                </div>
-                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Format Standard</span>
-                  <div className="font-mono font-bold text-slate-900 text-sm">ANSI COBOL-85</div>
-                  <div className="text-[11px] text-slate-500">Fixed 80-col layout (Columns 1–6 seq, 7 indicator, 8–72 text)</div>
-                </div>
-                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold font-mono block">Ingestion Status</span>
-                  <div className="font-bold text-emerald-700 text-sm">Verified & Staged</div>
-                  <div className="text-[11px] text-slate-500">{stagedFiles.length} file(s) in active project workspace</div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-bold text-slate-800 uppercase font-mono mb-2">Staged Project Files</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 text-xs">
-                  {stagedFiles.map((file, i) => (
-                    <div key={i} className="p-2.5 flex items-center justify-between bg-white hover:bg-slate-50/50">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-slate-800">{file.relativePath || file.name}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">({file.loc || file.content?.split('\n').length} LOC)</span>
-                      </div>
-                      <Badge variant={file.extension === 'cbl' || file.extension === 'cob' ? 'info' : 'neutral'} size="xs">
-                        {file.category || file.extension?.toUpperCase() || 'COBOL'}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STAGE 2: PROGRAM UNDERSTANDING */}
-          {activeStageId === 2 && (
-            <div className="space-y-4">
-              <p className="text-xs text-slate-700 leading-relaxed">
-                The AST parser processed the COBOL PROCEDURE DIVISION, cataloged control routines, and identified invocation sequences between paragraphs.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-mono uppercase block">Identified Paragraphs</span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">4</span>
-                  <p className="text-[11px] text-slate-500">1000, 2000, 2100, 9000-EXIT</p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-mono uppercase block">PERFORM Invocations</span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">2</span>
-                  <p className="text-[11px] text-slate-500">Internal subroutine execution</p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-mono uppercase block">External Subprograms</span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">0</span>
-                  <p className="text-[11px] text-slate-500">Zero dynamic CALL dependencies</p>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-bold text-slate-800 uppercase font-mono mb-2">Paragraph Call Hierarchy</h4>
-                <div className="font-mono text-xs bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-1 text-slate-700">
-                  <div>1000-CHECK-ACCOUNT-STATUS (Lines 24–29) &rarr; Entry check</div>
-                  <div className="pl-4 text-blue-700">&rarr; PERFORM 2000-PROCESS-PAYMENT (Lines 31–35)</div>
-                  <div className="pl-8 text-amber-700">&rarr; PERFORM 2100-CALCULATE-PENALTY (Lines 37–44)</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STAGE 3: BUSINESS RULE EXTRACTION */}
-          {activeStageId === 3 && (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-700 leading-relaxed">
-                Rules extracted directly from conditional statements in the source code. Each candidate is assigned a unique finding ID and verifiable line citation.
-              </p>
-
-              <div className="space-y-2">
-                {componentStrategies.map((rule) => (
-                  <div key={rule.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-blue-700">{rule.ruleId}</span>
-                        <span className="font-mono text-slate-800 font-semibold">{rule.paragraph}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">({rule.lines})</span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 mt-1">{rule.recommendation}</p>
-                    </div>
-                    <Badge variant="neutral" size="xs">
-                      {rule.sourceFile}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* STAGE 4: DEPENDENCY & RISK ASSESSMENT */}
-          {activeStageId === 4 && (
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-amber-950">
-                <strong>Heuristic Risk Evaluation:</strong> Routine <code>2100-CALCULATE-PENALTY</code> performs direct financial arithmetic (<code className="font-mono">WS-BALANCE - 50.00</code>) affecting deposit account balances. Any modernization divergence causes fiscal audit non-compliance.
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="font-bold text-slate-900 block font-mono">Blast Radius: 2100-CALCULATE-PENALTY</span>
-                  <p className="text-slate-600 text-[11px]">
-                    Direct caller: <code>2000-PROCESS-PAYMENT</code>. Shared working storage: <code>WS-BALANCE</code>, <code>WS-PENALTY-FEE</code>.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="font-bold text-slate-900 block font-mono">Data Mutation Risk</span>
-                  <p className="text-slate-600 text-[11px]">
-                    Side-effect: Mutates global balance field in-place without rollback transaction wrapper.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STAGE 5: EVIDENCE VERIFICATION */}
-          {activeStageId === 5 && (
-            <div className="space-y-4">
-              {isReassessed ? (
-                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold font-mono text-xs uppercase text-rose-900">
-                      Governance Blocker: Incident INC-101 Conflicted
+                  <div>
+                    <span className="font-bold text-xs text-slate-900 block">
+                      DECISION GATE: Evidence Verification & Governance Check
                     </span>
-                    <Badge variant="danger" size="xs">Migration Approval Locked</Badge>
+                    <span className="text-[11px] text-slate-600">
+                      Reconciles code findings with real production incident reports (INC-101)
+                    </span>
                   </div>
-                  <p className="text-slate-700 leading-relaxed text-[11px]">
-                    Evidence from production ticket <strong>INC-101</strong> conflicts with COBOL code: Customer accounts granted an approved payment extension (<code className="font-mono">WS-PAYMENT-EXT-FLAG = 'Y'</code>) were incorrectly charged penalty fees. The copybook <code>ACCTREC.cpy</code> defines the flag, but the PROCEDURE DIVISION ignores it. Automated Java 21 translation is locked until domain owners verify the waiver rule.
+                </div>
+
+                <span className={`px-2 py-0.5 rounded font-mono text-xs font-bold self-start sm:self-auto ${
+                  isReassessed 
+                    ? 'bg-rose-600 text-white shadow-2xs' 
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {isReassessed ? 'GOVERNANCE BLOCKER: INC-101' : 'BASELINE VERIFIED'}
+                </span>
+              </div>
+
+              {isReassessed ? (
+                <div className="p-3 rounded bg-white border border-rose-200 text-xs text-rose-950 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-rose-900">
+                    <span>⚠️ Conflict Discovered:</span>
+                    <span>Customer Payment Extension Exemption Missing in PROCEDURE DIVISION</span>
+                  </div>
+                  <p className="text-[11px] text-slate-700 leading-relaxed">
+                    Customer incident <strong>INC-101</strong> confirmed accounts with approved payment extensions were incorrectly assessed the $50 penalty. Copybook <code>ACCTREC.cpy</code> defines <code>WS-PAYMENT-EXT-FLAG</code>, but the code omits checking it. <strong>Automated conversion to Java 21 is blocked until retail banking domain owners validate waiver policy.</strong>
                   </p>
                 </div>
               ) : (
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold font-mono text-xs text-slate-900">
-                      Baseline Code Analysis (No Conflict Evidence Added Yet)
-                    </span>
-                    <Badge variant="success" size="xs">Baseline Observed</Badge>
+                <div className="text-[11px] text-slate-600 leading-relaxed">
+                  No active customer dispute stream conflicts detected. The code behavior is currently verified against observed baseline specifications.
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* CONNECTOR ARROW TO 4R BRANCH */}
+          <div className="flex justify-center my-1 text-slate-400 font-bold text-sm">
+            &darr;
+          </div>
+
+          {/* STEP 7: 4R MODERNIZATION DECISION BRANCHING */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] font-mono flex items-center justify-center">
+                  7
+                </span>
+                <span className="font-bold text-xs text-slate-900">
+                  Step 7: Modernization Decision (4R Framework Branching)
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500 font-mono">
+                Allocates strategy per COBOL routine based on side-effects and risk
+              </span>
+            </div>
+
+            {/* 4R Strategy Branches */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-slate-900 text-xs">RETAIN</span>
+                  <Badge variant="neutral" size="xs">Low Risk</Badge>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Keep behavior unchanged or map directly to type-safe Java enum (e.g. <code>AccountStatus.java</code>).
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white border border-blue-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-blue-700 text-xs">REFACTOR</span>
+                  <Badge variant="info" size="xs">Recommended</Badge>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Re-engineer into clean Spring Boot domain service with BigDecimal arithmetic (e.g. <code>PenaltyCalculationService.java</code>).
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-slate-900 text-xs">REPLACE</span>
+                  <Badge variant="neutral" size="xs">Infrastructure</Badge>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Replace legacy batch flat-file storage with modern PostgreSQL database and transactional ledger.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-slate-900 text-xs">REMOVE</span>
+                  <Badge variant="neutral" size="xs">Dead Code</Badge>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Eliminate redundant operating system calls and obsolete batch control paragraphs.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CONNECTOR ARROW TO EXECUTION STEPS */}
+          <div className="flex justify-center my-1 text-slate-400 font-bold text-sm">
+            &darr;
+          </div>
+
+          {/* STAGE ROW 2: Steps 8, 9, 10 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {flowNodes.slice(7).map((node) => {
+              const isSelected = selectedNodeId === node.id;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => setSelectedNodeId(node.id)}
+                  className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-blue-50/70 border-blue-500 shadow-xs ring-2 ring-blue-500/20'
+                      : 'bg-white hover:bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] font-mono ${
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {node.step}
+                      </span>
+                      <span className={`text-[10px] font-semibold font-mono px-1.5 py-0.2 rounded border ${
+                        node.statusColor === 'emerald'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : node.statusColor === 'rose'
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}>
+                        {node.status}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-xs text-slate-900 leading-snug">
+                      {node.techLabel}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                      {node.plainEnglish}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Code analysis reflects the current COBOL source behavior. To simulate evidence governance, submit ticket INC-101 in the Business Logic section to trigger the evidence-gating mechanism.
+
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] font-mono text-slate-600 font-medium">
+                    {node.badge}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. INTERACTIVE NODE DETAILS PANEL */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-lg bg-blue-600 text-white font-mono font-bold flex items-center justify-center text-sm">
+              {activeNode.step}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">{activeNode.techLabel}</h3>
+                <Badge variant={activeNode.statusColor === 'emerald' ? 'success' : activeNode.statusColor === 'rose' ? 'danger' : 'warning'} size="xs" dot>
+                  {activeNode.status}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                Plain English: &ldquo;{activeNode.plainEnglish}&rdquo;
+              </p>
+            </div>
+          </div>
+          <span className="text-xs text-slate-400 font-mono self-start sm:self-auto">
+            Node: {activeNode.id.toUpperCase()}
+          </span>
+        </div>
+
+        <div className="p-5 text-xs text-slate-700 space-y-4">
+          {/* EVIDENCE & CONFLICT DETAILS (Node 6) */}
+          {activeNode.id === 'evidence' && (
+            <div className="space-y-3">
+              {isReassessed ? (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 space-y-3 text-rose-950">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold font-mono text-xs text-rose-900">
+                      GOVERNANCE BLOCKER: Incident INC-101 Corroboration Conflict
+                    </span>
+                    <Badge variant="danger" size="xs">Execution Approval Locked</Badge>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div><strong>Incident Context:</strong> Customer payment dispute ticket INC-101.</div>
+                    <div><strong>Observed Conflict:</strong> Deposit accounts granted approved payment extensions were assessed $50 penalty fees because PROCEDURE DIVISION logic in <code>2100-CALCULATE-PENALTY</code> omits evaluating copybook field <code>WS-PAYMENT-EXT-FLAG</code>.</div>
+                    <div><strong>Business Validation Required:</strong> Retail deposit credit policy owners must sign off on whether extensions unconditionally waive the penalty fee.</div>
+                  </div>
+                  <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-600 font-medium">Resolution Action:</span>
+                    <Button variant="secondary" size="xs" onClick={() => onNavigate('business-logic')}>
+                      View Conflict in Business Logic &rarr;
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="font-bold text-slate-900 text-xs">
+                    Baseline Verification Observed
+                  </div>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    Code analysis reflects the observed source code rules. No operational disputes have been submitted. You can simulate incident corroboration by submitting ticket INC-101 in the Business Logic section.
                   </p>
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => onNavigate('business-logic')}
-                  >
-                    Open Business Logic to Submit INC-101 &rarr;
-                  </Button>
                 </div>
               )}
             </div>
           )}
 
-          {/* STAGE 6: MODERNIZATION STRATEGY */}
-          {activeStageId === 6 && (
+          {/* 4R STRATEGY DETAILS (Node 7) */}
+          {activeNode.id === 'decision' && (
             <div className="space-y-3">
-              <p className="text-xs text-slate-700 leading-relaxed">
-                4R component modernization allocations formulated from evidence corroboration, side-effect boundaries, and risk factors.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <h4 className="font-bold text-slate-900 text-xs uppercase font-mono">
+                Component Modernization Allocations
+              </h4>
+              <div className="space-y-2">
                 {componentStrategies.map((comp) => (
-                  <div key={comp.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs flex flex-col justify-between">
+                  <div key={comp.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-bold text-slate-900 text-xs">{comp.paragraph}</span>
-                        <Badge variant={comp.strategyBadge} size="xs">{comp.strategy}</Badge>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-slate-900">{comp.paragraph}</span>
+                        <span className="text-slate-400 font-mono text-[10px]">({comp.lines})</span>
                       </div>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">{comp.recommendation}</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">{comp.recommendation}</p>
                     </div>
-                    <div className="pt-2 border-t border-slate-200 text-[10px] text-blue-700 font-mono truncate">
-                      {comp.targetArtifact}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={comp.strategyBadge} size="xs">{comp.strategy}</Badge>
+                      <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                        {comp.targetArtifact.split(' ')[0]}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -630,23 +696,22 @@ export default function ModernizationReportSection({ onNavigate }) {
             </div>
           )}
 
-          {/* STAGE 7: MIGRATION PLANNING */}
-          {activeStageId === 7 && (
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-950 text-xs">
-                <strong>Target Architecture:</strong> Java 21 LTS + Spring Boot 3.3.x using hexagonal clean domain core, immutable Java Records, and BigDecimal financial precision.
-              </div>
-
-              <div className="space-y-2.5">
+          {/* MIGRATION PLAN DETAILS (Node 8) */}
+          {activeNode.id === 'plan' && (
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-900 text-xs uppercase font-mono">
+                Phased Migration Roadmap (Java 21 LTS + Spring Boot 3.3.x)
+              </h4>
+              <div className="space-y-2">
                 {migrationPhases.map((phase, pIdx) => (
-                  <div key={pIdx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-mono text-[10px]">
+                  <div key={pIdx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-mono flex items-center justify-center">
                         {pIdx + 1}
                       </span>
                       {phase.name}
                     </div>
-                    <ul className="text-slate-600 text-[11px] list-disc list-inside pl-5 space-y-1">
+                    <ul className="text-slate-600 text-[11px] list-disc list-inside pl-5 space-y-0.5">
                       {phase.actions.map((act, aIdx) => (
                         <li key={aIdx}>{act}</li>
                       ))}
@@ -657,37 +722,48 @@ export default function ModernizationReportSection({ onNavigate }) {
             </div>
           )}
 
-          {/* STAGE 8: REGRESSION VERIFICATION */}
-          {activeStageId === 8 && (
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs">
-                <strong>Characterization Testing Contract:</strong> Golden-master test cases synthesized from AST condition boundary inputs. Assertions must match COBOL behavior before retiring legacy routines.
-              </div>
-
-              <div className="space-y-3">
+          {/* TESTING DETAILS (Node 9) */}
+          {activeNode.id === 'testing' && (
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-900 text-xs uppercase font-mono">
+                Characterization Regression Test Cases
+              </h4>
+              <div className="space-y-2">
                 {(liveRegressionTests.length > 0 ? liveRegressionTests : REGRESSION_TEST_SCENARIOS).map((test, idx) => (
-                  <div key={test.id || idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-slate-900">{test.title || test.id}</span>
+                  <div key={test.id || idx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between font-mono font-bold text-slate-900 text-xs">
+                      <span>{test.title || test.id}</span>
                       <Badge variant="success" size="xs">Synthesized</Badge>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono bg-white p-2.5 rounded border border-slate-200">
-                      <div><span className="text-slate-400">Boundary Input:</span> {test.inputs || test.boundary}</div>
-                      <div><span className="text-slate-400">Expected Outcome:</span> {test.expected}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono bg-white p-2 rounded border border-slate-200">
+                      <div><span className="text-slate-400">Input:</span> {test.inputs || test.boundary}</div>
+                      <div><span className="text-slate-400">Expected:</span> {test.expected}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {/* GENERIC SUMMARY FOR NODES 1-5, 10 */}
+          {activeNode.id !== 'evidence' && activeNode.id !== 'decision' && activeNode.id !== 'plan' && activeNode.id !== 'testing' && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="font-bold text-slate-900 text-xs">
+                {activeNode.techLabel} Summary
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                {activeNode.summaryText}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 5. TARGET JAVA 21 ARTIFACT SPECIFICATIONS & CODE PREVIEW */}
+      {/* 5. TARGET ARCHITECTURE DIAGRAM (PROPOSED JAVA 21 APPLICATION) */}
       <Card
-        title="Synthesized Java 21 Target Service Specification"
-        subtitle="PenaltyCalculationService.java — Hexagonal domain core with BigDecimal precision"
-        badge={<Badge variant="info" size="xs">Java 21 LTS</Badge>}
+        title="Proposed Modernization Target Architecture"
+        subtitle="Hexagonal Clean Architecture for Java 21 LTS + Spring Boot 3.3.x"
+        badge={<Badge variant="info" size="xs">Target Architecture</Badge>}
         actions={
           <Button
             variant="secondary"
@@ -725,12 +801,48 @@ public class PenaltyCalculationService {
     }
 }`)}
           >
-            {copiedId === 'java-service' ? 'Copied!' : 'Copy Java 21 Code'}
+            {copiedId === 'java-service' ? 'Copied!' : 'Copy Java 21 Service Code'}
           </Button>
         }
       >
-        <div className="space-y-3">
-          <div className="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs overflow-x-auto border border-slate-800 max-h-72">
+        <div className="space-y-4 text-xs">
+          {/* Target Architecture Flow Diagram */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 font-mono text-[11px]">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-center">
+              <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-2xs flex-1 w-full">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">1. Existing System</span>
+                <span className="font-bold text-slate-900 block mt-1">COBOL-85 Source</span>
+                <span className="text-[10px] text-slate-500">PENALTY.cbl, ACCTREC.cpy</span>
+              </div>
+
+              <span className="text-slate-400 font-bold">&rarr;</span>
+
+              <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-2xs flex-1 w-full">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">2. Governance Validation</span>
+                <span className="font-bold text-blue-700 block mt-1">Validated Business Rules</span>
+                <span className="text-[10px] text-slate-500">AST Conditionals + INC-101</span>
+              </div>
+
+              <span className="text-slate-400 font-bold">&rarr;</span>
+
+              <div className="p-3 rounded-lg bg-blue-50/80 border border-blue-200 shadow-2xs flex-1 w-full">
+                <span className="text-[10px] text-blue-600 uppercase font-bold block">3. Proposed Java 21 App</span>
+                <span className="font-bold text-blue-900 block mt-1">Spring Boot 3.3.x</span>
+                <span className="text-[10px] text-blue-700">Hexagonal Domain Core</span>
+              </div>
+
+              <span className="text-slate-400 font-bold">&rarr;</span>
+
+              <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-2xs flex-1 w-full">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">4. Regression Verification</span>
+                <span className="font-bold text-emerald-700 block mt-1">JUnit 5 Test Suite</span>
+                <span className="text-[10px] text-slate-500">Zero-Divergence Parity</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Java 21 Spring Boot Code Preview */}
+          <div className="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs overflow-x-auto border border-slate-800 max-h-64 shadow-inner">
             <pre className="text-[11px] leading-relaxed">
 {`package com.bank.modernization.domain.service;
 
@@ -765,6 +877,10 @@ public class PenaltyCalculationService {
     }
 }`}
             </pre>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-[11px] leading-relaxed">
+            <strong>Architecture Notice:</strong> The target Java 21 service implementation is formulated as an architectural recommendation based on extracted AST conditionals and validated incident evidence. LegacyIQ does not claim unverified automatic code conversion.
           </div>
         </div>
       </Card>

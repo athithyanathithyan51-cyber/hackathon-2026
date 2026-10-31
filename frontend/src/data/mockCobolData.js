@@ -75,6 +75,55 @@ export const COBOL_DEMO_FILES = [
            05  ACCT-CURR-BAL       PIC S9(9)V99.
            05  ACCT-EXT-STATUS     PIC X(01).`,
     isCobol: true
+  },
+  {
+    id: 'cbl-file-03',
+    name: 'TRANS_PROC.cbl',
+    extension: '.cbl',
+    type: 'COBOL Source Program',
+    size: '1.2 KB',
+    loc: 38,
+    programId: 'TRANS-PROC',
+    status: 'Ready (Transaction Processor)',
+    content: `       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TRANS-PROC.
+      *================================================================*
+      * RETAIL BANKING CORE: TRANSACTION LIMIT & SURCHARGE PROCESSOR   *
+      * TARGET MODERNIZATION: JAVA 21 + SPRING BOOT 3.x                *
+      *================================================================*
+       ENVIRONMENT DIVISION.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-TRANSACTION-RECORD.
+           05  WS-TXN-ID              PIC X(12).
+           05  WS-TXN-TYPE            PIC X(03).
+           05  WS-TXN-AMOUNT          PIC 9(7)V99.
+           05  WS-TXN-STATUS          PIC X(10)   VALUE "PENDING".
+           05  WS-MAX-DAILY-LIMIT     PIC 9(6)V99 VALUE 50000.00.
+           05  WS-FEE-AMOUNT          PIC 9(4)V99 VALUE 0.00.
+
+       PROCEDURE DIVISION.
+       0000-PROCESS-TXN.
+           PERFORM 1000-VALIDATE-LIMIT.
+           PERFORM 2000-CALCULATE-FEE.
+           STOP RUN.
+
+       1000-VALIDATE-LIMIT.
+      * RULE TX-001: TRANSACTION LIMIT COMPLIANCE
+           IF WS-TXN-AMOUNT > WS-MAX-DAILY-LIMIT
+               MOVE "REJECTED" TO WS-TXN-STATUS
+           ELSE
+               MOVE "APPROVED" TO WS-TXN-STATUS
+           END-IF.
+
+       2000-CALCULATE-FEE.
+      * RULE TX-002: WIRE TRANSFER SURCHARGE
+           IF WS-TXN-TYPE = "WRE"
+               COMPUTE WS-FEE-AMOUNT = WS-TXN-AMOUNT * 0.015
+           ELSE
+               MOVE 0.00 TO WS-FEE-AMOUNT
+           END-IF.`,
+    isCobol: true
   }
 ];
 

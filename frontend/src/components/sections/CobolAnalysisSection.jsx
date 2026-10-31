@@ -4,6 +4,7 @@ import Badge from '../common/Badge';
 import Button from '../common/Button';
 import { useProject } from '../../context/ProjectContext';
 import { SAMPLE_GITHUB_COBOL_URLS } from '../../services/githubService';
+import { analyzeFileContent } from '../../services/cobolAnalysisHelper';
 
 export default function CobolAnalysisSection({ onNavigate }) {
   const {
@@ -22,9 +23,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
     report,
     isBackendOnline,
     ingestGitHubFile,
-    referenceRules,
-    referenceParagraphs,
-    referenceDataItems,
     isReassessed
   } = useProject();
 
@@ -37,17 +35,23 @@ export default function CobolAnalysisSection({ onNavigate }) {
   // Drag and drop state for ZIP
   const [isDraggingZip, setIsDraggingZip] = useState(false);
   const fileInputRef = useRef(null);
+  const codeViewerRef = useRef(null);
 
   // File explorer filter state
   const [fileFilterText, setFileFilterText] = useState('');
   const [fileCategoryFilter, setFileCategoryFilter] = useState('ALL'); // 'ALL' | 'COBOL' | 'COPYBOOKS' | 'OTHER'
 
   // Viewer state
-  const [selectedParagraphId, setSelectedParagraphId] = useState(referenceParagraphs[0]?.id || 'para-2100');
-  const [selectedRuleId, setSelectedRuleId] = useState('BR-001');
-  const [highlightedLines, setHighlightedLines] = useState([37, 44]); // Default highlight
+  const [selectedParagraphName, setSelectedParagraphName] = useState(null);
+  const [selectedRuleId, setSelectedRuleId] = useState(null);
+  const [highlightedLines, setHighlightedLines] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [rightPanelTab, setRightPanelTab] = useState('RULES'); // 'RULES' | 'DATA' | 'STRUCTURE'
+
+  // DYNAMIC FILE-SPECIFIC ANALYSIS: Extract AST, data items, and structure for activeFile
+  const fileAnalysis = useMemo(() => {
+    return analyzeFileContent(activeFile);
+  }, [activeFile]);
 
   // Filtered files in Project File Explorer
   const filteredFiles = useMemo(() => {
@@ -58,60 +62,72 @@ export default function CobolAnalysisSection({ onNavigate }) {
 
       if (!matchesSearch) return false;
 
+      const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
       if (fileCategoryFilter === 'COBOL') {
-        return file.classification === 'cobol_program' || file.extension === 'cbl' || file.extension === 'cob';
+        return file.classification === 'cobol_program' || ext === 'cbl' || ext === 'cob';
       }
       if (fileCategoryFilter === 'COPYBOOKS') {
-        return file.classification === 'copybook' || file.extension === 'cpy';
+        return file.classification === 'copybook' || ext === 'cpy';
       }
       if (fileCategoryFilter === 'OTHER') {
         return file.classification !== 'cobol_program' && file.classification !== 'copybook' &&
-          file.extension !== 'cbl' && file.extension !== 'cob' && file.extension !== 'cpy';
+          ext !== 'cbl' && ext !== 'cob' && ext !== 'cpy';
       }
 
       return true;
     });
   }, [stagedFiles, fileFilterText, fileCategoryFilter]);
 
-  // Counts for category badges
+  // Category counts
   const fileCategoryCounts = useMemo(() => {
-    const cobol = stagedFiles.filter(f => f.classification === 'cobol_program' || f.extension === 'cbl' || f.extension === 'cob').length;
-    const copybooks = stagedFiles.filter(f => f.classification === 'copybook' || f.extension === 'cpy').length;
+    const cobol = stagedFiles.filter(f => {
+      const ext = (f.extension || '').toLowerCase().replace(/^\./, '');
+      return f.classification === 'cobol_program' || ext === 'cbl' || ext === 'cob';
+    }).length;
+    const copybooks = stagedFiles.filter(f => {
+      const ext = (f.extension || '').toLowerCase().replace(/^\./, '');
+      return f.classification === 'copybook' || ext === 'cpy';
+    }).length;
     const other = stagedFiles.length - cobol - copybooks;
     return { all: stagedFiles.length, cobol, copybooks, other };
   }, [stagedFiles]);
 
   // Extract paragraphs for the active file
-  const paragraphList = useMemo(() => {
-    if (report?.analysis?.paragraphs && report.analysis.paragraphs.length > 0) {
-      return report.analysis.paragraphs.map((pKey, idx) => {
-        const paraName = pKey.includes(':') ? pKey.split(':')[1] : pKey;
-        const matchingRef = referenceParagraphs.find(p => p.name === paraName);
-        return {
-          id: `para-${idx}`,
-          name: paraName,
-          lineStart: matchingRef?.lineStart || 1,
-          lineEnd: matchingRef?.lineEnd || 10,
-          summary: matchingRef?.summary || `PROCEDURE DIVISION routine ${paraName}`,
-          performedBy: matchingRef?.performedBy || []
-        };
-      });
+  const activeParagraphs = useMemo(() => {
+    if (fileAnalysis.fileType !== 'cobol_program') {
+      return [];
     }
-    return referenceParagraphs;
-  }, [report, referenceParagraphs]);
+    return fileAnalysis.paragraphs;
+  }, [fileAnalysis]);
 
-  const activeParagraph = paragraphList.find(p => p.id === selectedParagraphId) || paragraphList[0];
+  // DYNAMIC RULES FOR ACTIVE FILE ONLY
+  const activeFileRules = useMemo(() => {
+    if (!activeFile) return [];
+    const ext = (activeFile.extension || '').toLowerCase().replace(/^\./, '');
+    
+    // Copybooks and non-COBOL files do not have business rules
+    if (ext !== 'cbl' && ext !== 'cob') {
+      return [];
+    }
 
-  // Display findings
-  const displayRules = useMemo(() => {
-    if (findings && findings.length > 0) {
-      return findings.map((f, idx) => {
+    const currentPath = activeFile.relativePath || activeFile.name;
+    
+    // Retrieve backend findings that strictly match this file's path
+    const matchingBackend = findings.filter(f => {
+      if (f.file === currentPath || f.file === activeFile.name) return true;
+      if (activeFile.name === 'PENALTY.cbl' && (!f.file || f.file === 'PENALTY.cbl')) return true;
+      if (f.file && currentPath.endsWith(f.file)) return true;
+      return false;
+    });
+
+    if (matchingBackend.length > 0) {
+      return matchingBackend.map((f, idx) => {
         const isDisputed = f.evidence_status === 'CONFLICTED_BY_EVIDENCE' || (f.function.includes('2100') && isReassessed);
         return {
-          id: f.id || `BR-00${idx + 1}`,
+          id: f.id || `BR-${idx + 1}`,
           title: f.description || `Rule in ${f.function}`,
           paragraph: f.function,
-          file: f.file,
+          file: f.file || currentPath,
           lines: `Line ${f.start_line}`,
           startLine: f.start_line,
           endLine: f.start_line + 4,
@@ -125,17 +141,20 @@ export default function CobolAnalysisSection({ onNavigate }) {
       });
     }
 
-    return referenceRules.map(r => {
-      const matchStart = r.lines.match(/\d+/);
-      const matchEnd = r.lines.match(/\d+$/);
-      return {
-        ...r,
-        startLine: matchStart ? parseInt(matchStart[0], 10) : 1,
-        endLine: matchEnd ? parseInt(matchEnd[0], 10) : 10,
-        isLiveBackend: false
-      };
-    });
-  }, [findings, referenceRules, isReassessed]);
+    // Fallback: Use rules extracted from this file's own PROCEDURE DIVISION
+    return fileAnalysis.rules;
+  }, [activeFile, findings, isReassessed, fileAnalysis]);
+
+  // Scroll to code line in viewer
+  const scrollToLine = (lineNumber) => {
+    if (!lineNumber) return;
+    setTimeout(() => {
+      const lineEl = document.getElementById(`source-line-${lineNumber}`);
+      if (lineEl && codeViewerRef.current) {
+        lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
+  };
 
   // Handle GitHub Ingestion
   const handleFetchGitHub = async (urlToFetch) => {
@@ -178,39 +197,31 @@ export default function CobolAnalysisSection({ onNavigate }) {
   const handleSelectFile = (file) => {
     selectFile(file.id || file.name);
     clearMessages();
-    if (file.name === 'PENALTY.cbl') {
-      setHighlightedLines([37, 44]);
-      setSelectedRuleId('BR-001');
-      setSelectedParagraphId(referenceParagraphs[0]?.id || 'para-2100');
-    } else {
-      setHighlightedLines(null);
-    }
+    setHighlightedLines(null);
+    setSelectedRuleId(null);
+    setSelectedParagraphName(null);
   };
 
-  // Rule selection handler
+  // Rule selection handler: highlights lines and scrolls to them
   const handleSelectRule = (rule) => {
     setSelectedRuleId(rule.id);
-    if (rule.file) {
-      selectFile(rule.file);
-    }
     if (rule.startLine && rule.endLine) {
       setHighlightedLines([rule.startLine, rule.endLine]);
+      scrollToLine(rule.startLine);
     } else if (rule.startLine) {
       setHighlightedLines([rule.startLine, rule.startLine + 3]);
+      scrollToLine(rule.startLine);
     } else {
       setHighlightedLines(null);
     }
-
-    const matchedPara = paragraphList.find(p => p.name === rule.paragraph);
-    if (matchedPara) {
-      setSelectedParagraphId(matchedPara.id);
-    }
+    setSelectedParagraphName(rule.paragraph);
   };
 
-  // Paragraph selection handler
+  // Paragraph selection handler: highlights lines and scrolls
   const handleSelectParagraph = (para) => {
-    setSelectedParagraphId(para.id);
+    setSelectedParagraphName(para.name);
     setHighlightedLines([para.lineStart, para.lineEnd]);
+    scrollToLine(para.lineStart);
   };
 
   // Split lines for line-numbered view
@@ -221,7 +232,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
 
   return (
     <div className="space-y-5">
-      {/* 1. Ingestion Card with Tabbed Modes (GitHub URL vs Upload ZIP) */}
+      {/* 1. Ingestion Card with Tabbed Modes */}
       <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
@@ -327,7 +338,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
         {/* TAB 2: ZIP PROJECT UPLOAD INGESTION */}
         {ingestionTab === 'ZIP' && (
           <div className="space-y-3">
-            {/* Hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -364,7 +374,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
                 </p>
               </div>
 
-              {/* Security & Limits Pill */}
               <div className="flex flex-wrap items-center justify-center gap-2 mt-1 text-[10px] text-slate-400 font-mono">
                 <span>Max: 25 MB compressed</span>
                 <span>•</span>
@@ -376,7 +385,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
               </div>
             </div>
 
-            {/* Progress Bar when analyzing ZIP */}
             {isAnalyzing && (
               <div className="space-y-1.5 p-3 rounded-lg bg-blue-50/70 border border-blue-200">
                 <div className="flex items-center justify-between text-xs text-blue-900 font-semibold">
@@ -392,7 +400,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
               </div>
             )}
 
-            {/* ZIP Project Summary Breakdown (if loaded) */}
             {zipSummary && (
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -470,7 +477,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
             LEFT PANEL: Project File Explorer & Paragraph Explorer
            ========================================================================= */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Project File Explorer Card */}
           <Card
             title="Project File Explorer"
             subtitle={`${stagedFiles.length} files staged`}
@@ -481,7 +487,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
             }
           >
             <div className="space-y-2.5">
-              {/* Search file filter */}
               <input
                 type="text"
                 value={fileFilterText}
@@ -490,7 +495,6 @@ export default function CobolAnalysisSection({ onNavigate }) {
                 className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-md text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
 
-              {/* Category Filter Pills */}
               <div className="flex flex-wrap items-center gap-1 text-[10px]">
                 <button
                   type="button"
@@ -541,10 +545,11 @@ export default function CobolAnalysisSection({ onNavigate }) {
               </div>
 
               {/* File List */}
-              <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
                 {filteredFiles.map((file) => {
                   const isSelected = file.id === activeFile?.id || file.name === activeFile?.name;
-                  const isCobol = file.extension === 'cbl' || file.extension === 'cob';
+                  const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
+                  const isCobol = ext === 'cbl' || ext === 'cob';
 
                   return (
                     <button
@@ -553,7 +558,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
                       onClick={() => handleSelectFile(file)}
                       className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all cursor-pointer flex flex-col gap-1 ${
                         isSelected
-                          ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold shadow-2xs'
+                          ? 'bg-blue-50 border-blue-400 text-blue-900 font-semibold shadow-2xs'
                           : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                       }`}
                     >
@@ -562,10 +567,10 @@ export default function CobolAnalysisSection({ onNavigate }) {
                           {file.name}
                         </span>
                         <Badge 
-                          variant={isCobol ? 'info' : file.extension === 'cpy' ? 'neutral' : 'warning'} 
+                          variant={isCobol ? 'info' : ext === 'cpy' ? 'neutral' : 'warning'} 
                           size="xs"
                         >
-                          {file.extension ? `.${file.extension}` : 'FILE'}
+                          {ext ? `.${ext}` : 'FILE'}
                         </Badge>
                       </div>
 
@@ -582,16 +587,16 @@ export default function CobolAnalysisSection({ onNavigate }) {
             </div>
           </Card>
 
-          {/* Paragraph Explorer (When active file is a COBOL program) */}
-          {(activeFile?.isCobol || activeFile?.name?.endsWith('.cbl') || activeFile?.name?.endsWith('.cob')) && (
+          {/* Paragraph Explorer (Only shown for COBOL programs with paragraphs) */}
+          {activeParagraphs.length > 0 && (
             <Card
-              title="Paragraph Explorer"
-              subtitle="Click to highlight in viewer"
-              badge={<Badge variant="info" size="xs">{paragraphList.length}</Badge>}
+              title={`Paragraphs: ${activeFile?.name}`}
+              subtitle="Click to locate in source"
+              badge={<Badge variant="info" size="xs">{activeParagraphs.length}</Badge>}
             >
               <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1">
-                {paragraphList.map((p) => {
-                  const isSelected = selectedParagraphId === p.id || p.name === activeParagraph?.name;
+                {activeParagraphs.map((p) => {
+                  const isSelected = selectedParagraphName === p.name;
                   return (
                     <button
                       key={p.id}
@@ -607,7 +612,9 @@ export default function CobolAnalysisSection({ onNavigate }) {
                         <span className={`truncate ${isSelected ? 'text-blue-700 font-bold' : ''}`}>{p.name}</span>
                         <span className="text-[10px] text-slate-400 font-normal">L{p.lineStart}–L{p.lineEnd}</span>
                       </div>
-                      <div className="text-[10px] text-slate-500 line-clamp-1">{p.summary}</div>
+                      <div className="text-[10px] text-slate-500 line-clamp-1">
+                        {p.performs.length > 0 ? `PERFORMs: ${p.performs.join(', ')}` : p.summary}
+                      </div>
                     </button>
                   );
                 })}
@@ -617,7 +624,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
         </div>
 
         {/* =========================================================================
-            CENTER PANEL: Source Code Viewer with Line Numbers & Search
+            CENTER PANEL: Source Code Viewer with Line Numbers, Search & Scroll
            ========================================================================= */}
         <div className="lg:col-span-6 space-y-3">
           <Card
@@ -657,9 +664,9 @@ export default function CobolAnalysisSection({ onNavigate }) {
             <div className="mb-2 p-2 rounded bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-between">
               <span className="text-slate-600">
                 {activeFile?.extension === 'cbl' || activeFile?.extension === 'cob' ? (
-                  <span><strong>Supported Program:</strong> PROCEDURE DIVISION analyzed by AST engine.</span>
+                  <span><strong>COBOL Program:</strong> PROCEDURE DIVISION analyzed by AST engine (PROGRAM-ID: <code className="font-bold text-slate-800">{fileAnalysis.programId || 'UNSPECIFIED'}</code>).</span>
                 ) : activeFile?.extension === 'cpy' ? (
-                  <span><strong>Staged Copybook:</strong> Staged in project repository for field layout reference. Backend identifies COPY directives without recursive AST parsing.</span>
+                  <span><strong>Staged Copybook:</strong> Staged for field definitions. Copybooks contain no PROCEDURE DIVISION statements; business rules are not extracted.</span>
                 ) : (
                   <span><strong>Inspect-only file:</strong> Staged in project explorer for reference; not ingested into COBOL AST pipeline.</span>
                 )}
@@ -680,8 +687,11 @@ export default function CobolAnalysisSection({ onNavigate }) {
               />
             </div>
 
-            {/* Code Viewer */}
-            <div className="rounded-lg bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 max-h-[580px] shadow-inner select-text">
+            {/* Code Viewer Container */}
+            <div 
+              ref={codeViewerRef}
+              className="rounded-lg bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 max-h-[580px] shadow-inner select-text"
+            >
               <div className="py-2">
                 {sourceLines.map((line, idx) => {
                   const lineNum = idx + 1;
@@ -691,9 +701,10 @@ export default function CobolAnalysisSection({ onNavigate }) {
                   return (
                     <div
                       key={idx}
+                      id={`source-line-${lineNum}`}
                       className={`flex px-2 py-0.5 transition-colors ${
                         isHighlighted
-                          ? 'bg-amber-500/20 text-amber-200 border-l-2 border-amber-400'
+                          ? 'bg-amber-500/25 text-amber-200 border-l-2 border-amber-400'
                           : isSearchMatch
                           ? 'bg-blue-500/20 text-blue-200'
                           : 'hover:bg-slate-800/60'
@@ -730,7 +741,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
             <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-amber-400/30 border border-amber-400 inline-block" />
-                Active Rule Grounding
+                Active Line Grounding
               </span>
               <span>Encoding: UTF-8 / ASCII</span>
             </div>
@@ -738,7 +749,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
         </div>
 
         {/* =========================================================================
-            RIGHT PANEL: Extracted Rules, Data Items, and Program Structure
+            RIGHT PANEL: DYNAMIC FILE-SPECIFIC TABS (RULES, DATA ITEMS, STRUCTURE)
            ========================================================================= */}
         <div className="lg:col-span-3 space-y-4">
           {/* Right Panel Tabs */}
@@ -752,7 +763,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Rules ({displayRules.length})
+              Rules ({activeFileRules.length})
             </button>
             <button
               type="button"
@@ -763,7 +774,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Data Items
+              Data ({fileAnalysis.dataItems.length})
             </button>
             <button
               type="button"
@@ -778,119 +789,232 @@ export default function CobolAnalysisSection({ onNavigate }) {
             </button>
           </div>
 
-          {/* Tab 1: Extracted Business Rules */}
+          {/* TAB 1: RULES FOR ACTIVE FILE ONLY */}
           {rightPanelTab === 'RULES' && (
             <Card
-              title="Extracted Rules"
-              subtitle={isBackendOnline ? 'Genuinely extracted from backend engine' : 'Click to locate in source'}
-              badge={<Badge variant={isBackendOnline ? 'success' : 'info'} size="xs">{isBackendOnline ? 'Live Engine' : 'Grounded AST'}</Badge>}
+              title={`Rules: ${activeFile?.name || 'File'}`}
+              subtitle={
+                activeFileRules.length > 0 
+                  ? `${activeFileRules.length} rules belonging strictly to this file` 
+                  : 'No business rules extracted'
+              }
+              badge={
+                <Badge variant={activeFileRules.length > 0 ? 'info' : 'neutral'} size="xs">
+                  {activeFileRules.length > 0 ? 'Extracted' : 'Unavailable'}
+                </Badge>
+              }
             >
-              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-                {displayRules.map((rule) => {
-                  const isSelected = selectedRuleId === rule.id;
-                  const isDisputed = rule.status === 'CONFLICTED_BY_EVIDENCE';
+              {activeFileRules.length > 0 ? (
+                <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                  {activeFileRules.map((rule) => {
+                    const isSelected = selectedRuleId === rule.id;
+                    const isDisputed = rule.status === 'CONFLICTED_BY_EVIDENCE';
 
-                  return (
-                    <div
-                      key={rule.id}
-                      onClick={() => handleSelectRule(rule)}
-                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer text-xs ${
-                        isSelected
-                          ? 'bg-blue-50 border-blue-400 shadow-2xs'
-                          : 'bg-white hover:bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-bold text-slate-900 truncate max-w-[150px]">
-                          {rule.id.startsWith('BR-') ? rule.id.split('-').slice(0, 2).join('-') : rule.id}
-                        </span>
-                        <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 font-semibold">
-                          {rule.lines}
-                        </span>
-                      </div>
-                      <div className="font-semibold text-slate-800 text-[11px] mb-1">
-                        {rule.title}
-                      </div>
-                      {rule.observedCondition && (
-                        <div className="text-[11px] text-slate-500 font-mono bg-slate-50 p-1.5 rounded border border-slate-100 mb-1.5 leading-snug">
-                          {rule.observedCondition}
+                    return (
+                      <div
+                        key={rule.id}
+                        onClick={() => handleSelectRule(rule)}
+                        className={`p-3 rounded-lg border text-left transition-all cursor-pointer text-xs ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-400 shadow-2xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono font-bold text-slate-900 truncate max-w-[150px]">
+                            {rule.id.startsWith('BR-') ? rule.id.split('-').slice(0, 2).join('-') : rule.id}
+                          </span>
+                          <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 font-semibold">
+                            {rule.lines}
+                          </span>
                         </div>
-                      )}
-                      <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-100">
-                        <Badge variant={isDisputed ? 'danger' : 'success'} size="xs">
-                          {isDisputed ? 'CONFLICTED (INC-101)' : 'OBSERVED_IN_CODE'}
-                        </Badge>
-                        <span className="text-slate-400 font-mono">
-                          {rule.file ? rule.file.split('/').pop() : 'Rule Candidate'}
-                        </span>
+                        <div className="font-semibold text-slate-800 text-[11px] mb-1">
+                          {rule.title}
+                        </div>
+                        {rule.observedCondition && (
+                          <div className="text-[11px] text-slate-500 font-mono bg-slate-50 p-1.5 rounded border border-slate-100 mb-1.5 leading-snug">
+                            {rule.observedCondition}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-100">
+                          <Badge variant={isDisputed ? 'danger' : 'success'} size="xs">
+                            {isDisputed ? 'CONFLICTED (INC-101)' : 'OBSERVED_IN_CODE'}
+                          </Badge>
+                          <span className="text-slate-400 font-mono">
+                            {rule.paragraph}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Meaningful Empty State when Rules are unavailable */
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-center space-y-2 text-xs">
+                  <div className="text-slate-400 text-lg">📋</div>
+                  <div className="font-semibold text-slate-800">
+                    No Business Rules for {activeFile?.name}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {activeFile?.extension === 'cpy'
+                      ? 'Copybooks define data record schemas and field layouts. They contain no PROCEDURE DIVISION statements or executable control logic, so business rules are not extracted from copybook files.'
+                      : `This is an auxiliary project file (${activeFile?.classification || activeFile?.extension?.toUpperCase() || 'document'}). Business rule extraction is only performed on COBOL source programs with a PROCEDURE DIVISION.`
+                    }
+                  </p>
+                </div>
+              )}
             </Card>
           )}
 
-          {/* Tab 2: WORKING-STORAGE Data Definitions */}
+          {/* TAB 2: DATA ITEMS FOR ACTIVE FILE ONLY */}
           {rightPanelTab === 'DATA' && (
             <Card
-              title="WORKING-STORAGE"
-              subtitle="Data items and picture clauses"
-              badge={<Badge variant="neutral" size="xs">Data Dict</Badge>}
+              title={`Data Items: ${activeFile?.name || 'File'}`}
+              subtitle={
+                fileAnalysis.dataItems.length > 0 
+                  ? `${fileAnalysis.dataItems.length} declarations parsed from active source` 
+                  : 'No data declarations in this file'
+              }
+              badge={
+                <Badge variant={fileAnalysis.isCopybook ? 'neutral' : 'info'} size="xs">
+                  {fileAnalysis.isCopybook ? 'Copybook Schema' : 'DATA DIVISION'}
+                </Badge>
+              }
             >
-              <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
-                {referenceDataItems.map((item, idx) => (
-                  <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-                    <div className="flex items-center justify-between font-mono font-bold text-slate-900 text-[11px]">
-                      <span>{item.name}</span>
-                      <span className="text-blue-700 bg-blue-50 px-1 rounded text-[10px]">{item.pic}</span>
+              {fileAnalysis.dataItems.length > 0 ? (
+                <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
+                  {fileAnalysis.dataItems.map((item) => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => {
+                        setHighlightedLines([item.line, item.line]);
+                        scrollToLine(item.line);
+                      }}
+                      className="p-2.5 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-xs transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between font-mono font-bold text-slate-900 text-[11px]">
+                        <span className="truncate pr-1">
+                          {item.level < 10 ? `0${item.level}` : item.level} {item.name}
+                        </span>
+                        <span className="text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 text-[10px] shrink-0">
+                          {item.pic}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                        <span>
+                          {item.parentGroup ? `in ${item.parentGroup}` : item.role} • L{item.line}
+                        </span>
+                        <span>
+                          {item.value ? `VAL: ${item.value}` : item.usage || 'DISPLAY'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
-                      <span>Level {item.level} • {item.role}</span>
-                      <span className="truncate max-w-[110px] text-slate-400">{item.usage}</span>
-                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Empty state for Data Items */
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-center space-y-2 text-xs">
+                  <div className="text-slate-400 text-lg">🗂️</div>
+                  <div className="font-semibold text-slate-800">
+                    No Data Items in {activeFile?.name}
                   </div>
-                ))}
-              </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Data item declarations (levels 01–77, PICTURE clauses, and USAGE modes) are specific to COBOL DATA DIVISION and copybook layouts. Not applicable for this file type.
+                  </p>
+                </div>
+              )}
             </Card>
           )}
 
-          {/* Tab 3: Program Structure & Warnings */}
+          {/* TAB 3: STRUCTURE FOR ACTIVE FILE ONLY */}
           {rightPanelTab === 'STRUCTURE' && (
             <Card
-              title="Program Structure & Warnings"
+              title={`Structure: ${activeFile?.name || 'File'}`}
               badge={<Badge variant="warning" size="xs">Audit</Badge>}
             >
               <div className="space-y-3 text-xs">
-                <div className="space-y-1 text-[11px]">
-                  <span className="font-semibold text-slate-700 block">Identified Divisions:</span>
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200 space-y-0.5 font-mono text-[10px] text-slate-700">
-                    <div>✓ IDENTIFICATION DIVISION (Line 1)</div>
-                    <div>✓ ENVIRONMENT DIVISION (Line 8)</div>
-                    <div>✓ DATA DIVISION (Line 9)</div>
-                    <div>✓ PROCEDURE DIVISION (Line 21)</div>
-                  </div>
-                </div>
-
-                {report?.verification?.unsupported && report.verification.unsupported.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="font-semibold text-slate-900 block text-[11px]">Unsupported Constructs Found:</span>
-                    {report.verification.unsupported.map((u, i) => (
-                      <div key={i} className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-mono">
-                        {u.construct} at Line {u.line} ({u.file})
+                {/* For COBOL Programs */}
+                {fileAnalysis.fileType === 'cobol_program' && (
+                  <>
+                    <div className="p-2.5 rounded bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block">Program Identity</span>
+                      <div className="font-mono font-bold text-slate-900 text-sm">
+                        {fileAnalysis.programId || 'UNSPECIFIED'}
                       </div>
-                    ))}
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {activeFile?.relativePath || activeFile?.name} • {sourceLines.length} LOC
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-[11px]">
+                      <span className="font-semibold text-slate-700 block">Identified Divisions:</span>
+                      <div className="p-2 rounded bg-slate-50 border border-slate-200 space-y-0.5 font-mono text-[10px] text-slate-700">
+                        {fileAnalysis.divisions.map((div, i) => (
+                          <div key={i}>✓ {div.name} (Line {div.line})</div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {fileAnalysis.copies.length > 0 && (
+                      <div className="space-y-1 text-[11px]">
+                        <span className="font-semibold text-slate-700 block">Copybook Directives:</span>
+                        <div className="p-2 rounded bg-blue-50 border border-blue-200 space-y-0.5 font-mono text-[10px] text-blue-900">
+                          {fileAnalysis.copies.map((c, i) => (
+                            <div key={i}>COPY {c.copybook} (Line {c.line})</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {report?.verification?.unsupported && report.verification.unsupported.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="font-semibold text-slate-900 block text-[11px]">Unsupported Constructs Found:</span>
+                        {report.verification.unsupported.map((u, i) => (
+                          <div key={i} className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-mono">
+                            {u.construct} at Line {u.line} ({u.file})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* For Copybooks */}
+                {fileAnalysis.fileType === 'copybook' && (
+                  <div className="space-y-3">
+                    <div className="p-2.5 rounded bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block">Copybook Structure</span>
+                      <div className="font-mono font-bold text-slate-900 text-sm">
+                        {fileAnalysis.programId}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {fileAnalysis.dataItems.length} fields • ~{fileAnalysis.totalRecordBytes || 0} bytes
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Copybooks are compiled into programs using the <code className="font-mono font-bold text-slate-800">COPY</code> statement. Fields defined here become part of the parent program's WORKING-STORAGE or LINKAGE records.
+                    </p>
                   </div>
                 )}
 
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
-                  <span className="font-bold text-[11px] block">
-                    Logic Warning: Omitted Flag Check
-                  </span>
-                  <p className="text-[11px] text-slate-700 leading-snug">
-                    Paragraph <code>2100-CALCULATE-PENALTY</code> calculates minimum balance penalty without verifying copybook field <code>WS-PAYMENT-EXT-FLAG</code>. Flagged for review under incident INC-101.
-                  </p>
-                </div>
+                {/* For Unsupported Files */}
+                {fileAnalysis.fileType !== 'cobol_program' && fileAnalysis.fileType !== 'copybook' && (
+                  <div className="space-y-2">
+                    <div className="p-2.5 rounded bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block">File Classification</span>
+                      <div className="font-semibold text-slate-900 text-xs">
+                        {activeFile?.category || 'Project Auxiliary Asset'}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {activeFile?.relativePath || activeFile?.name} ({activeFile?.sizeFormatted || activeFile?.size})
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      This file is staged in the project workspace for inspection and context. Structural COBOL division analysis is not applicable to non-COBOL files.
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -901,7 +1025,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
       <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono">
-            Analysis & Modernization Summary: {activeParagraph?.name || activeFile?.name}
+            Analysis & Modernization Summary: {activeFile?.name}
           </span>
           <span className="text-xs text-slate-500 font-mono">
             {activeFile?.relativePath || activeFile?.name}
@@ -914,15 +1038,15 @@ export default function CobolAnalysisSection({ onNavigate }) {
               Call & Dependency Chain
             </span>
             <div className="font-mono text-slate-900 text-[11px]">
-              {dependencies[`${activeFile?.relativePath || activeFile?.name}:${activeParagraph?.name}`]
-                ? `${activeParagraph?.name} → ${dependencies[`${activeFile?.relativePath || activeFile?.name}:${activeParagraph?.name}`].join(', ') || 'Leaf'}`
-                : activeParagraph?.performedBy && activeParagraph.performedBy.length > 0 
-                ? `${activeParagraph.performedBy.join(', ')} → ${activeParagraph.name}`
-                : `Routine: ${activeParagraph?.name || 'Procedure'}`
+              {dependencies[`${activeFile?.relativePath || activeFile?.name}:${selectedParagraphName}`]
+                ? `${selectedParagraphName} → ${dependencies[`${activeFile?.relativePath || activeFile?.name}:${selectedParagraphName}`].join(', ') || 'Leaf'}`
+                : activeParagraphs.length > 0
+                ? `${activeParagraphs.length} routines mapped (${activeParagraphs.map(p => p.name).slice(0, 2).join(', ')}...)`
+                : 'No executable subroutines'
               }
             </div>
             <p className="text-[11px] text-slate-500">
-              {isBackendOnline ? 'Engine mapped call chain' : 'Observed PERFORM invocation'}
+              {isBackendOnline ? 'Engine mapped call chain' : 'Observed PERFORM hierarchy'}
             </p>
           </div>
 
@@ -931,15 +1055,17 @@ export default function CobolAnalysisSection({ onNavigate }) {
               Risk & Evidence Posture
             </span>
             <div className="font-semibold text-slate-900">
-              {isReassessed 
-                ? 'High / Critical Risk (INC-101 Conflict)' 
-                : 'Medium Risk: Deterministic Deduction'
+              {activeFile?.name === 'PENALTY.cbl' && isReassessed 
+                ? 'Critical Risk (INC-101 Waiver Conflict)' 
+                : activeFileRules.length > 0
+                ? 'Medium Risk: Baseline AST Logic'
+                : 'Low Risk: Reference Schema'
               }
             </div>
             <p className="text-[11px] text-slate-500">
-              {isReassessed
+              {activeFile?.name === 'PENALTY.cbl' && isReassessed
                 ? 'Incident INC-101 reports active billing dispute on extension waivers'
-                : 'Observed AST conditional meets baseline requirements'
+                : 'Observed conditional statements meet baseline specifications'
               }
             </p>
           </div>
@@ -947,10 +1073,14 @@ export default function CobolAnalysisSection({ onNavigate }) {
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1 flex flex-col justify-between">
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block">
-                Target Java 21 Spring Service
+                Target Modernization Output
               </span>
               <div className="font-mono text-blue-700 font-semibold text-[11px] truncate">
-                PenaltyCalculationService.java
+                {activeFile?.name === 'PENALTY.cbl' 
+                  ? 'PenaltyCalculationService.java' 
+                  : activeFile?.name === 'TRANS_PROC.cbl'
+                  ? 'TransactionProcessingService.java'
+                  : 'AccountRecord.java (Java 21 Record)'}
               </div>
             </div>
             <Button
@@ -959,7 +1089,7 @@ export default function CobolAnalysisSection({ onNavigate }) {
               onClick={() => onNavigate('modernization-report')}
               className="self-start mt-1"
             >
-              View Modernization Roadmap &rarr;
+              View Modernization Diagram &rarr;
             </Button>
           </div>
         </div>
